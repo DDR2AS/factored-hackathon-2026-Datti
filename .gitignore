@@ -1,0 +1,35 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+.env
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Directorios de datos (Evita subir gigabytes a Git)
+data/
+*.duckdb
+*.duckdb.wal
+*.csv
+*.parquet
+*.json
+
+# Módulos locales (no subir)
+src/agent/
+src/analysis/
+
+# Archivos temporales o generados
+proposal.txt
+*.log
+
+# SO y Editores
+.DS_Store
+.vscode/
+.idea/
