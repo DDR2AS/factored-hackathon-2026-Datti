@@ -1,0 +1,3 @@
+# Preserve both sides' appended coordination entries when branches merge.
+STATUS.md merge=union
+DECISIONS.md merge=union

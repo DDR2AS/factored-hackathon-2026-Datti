@@ -36,3 +36,23 @@ python src/etl/ingest_s3_duckdb.py
 ```
 
 > Los archivos que ya existen en `data/raw/` no se vuelven a descargar.
+
+---
+
+## Cómo trabajamos (leer primero)
+
+| Archivo | Para qué |
+| :--- | :--- |
+| [`RUNBOOK.md`](RUNBOOK.md) | Contexto operativo: fechas, reglas, desarrollo local, modelo de coordinación. **Empieza aquí.** |
+| [`docs/plan/expediente-vivo-v2.html`](docs/plan/expediente-vivo-v2.html) | Plan completo v2 con diagramas, decisiones, costos y cronograma (abrir en el navegador). |
+| [`DECISIONS.md`](DECISIONS.md) | Decisiones D1–D11, append-only. |
+| [`INTERFACES.md`](INTERFACES.md) | Contratos entre dueños (API, gateway, caso, modelos, tablas gold, reporte del investigador, trazas, cliente LLM). |
+| [`STATUS.md`](STATUS.md) | Reclamar trabajo antes de construirlo. |
+| [`docs/architecture.md`](docs/architecture.md) | Arquitectura en Mermaid (flujo, local, nube). |
+| [`AGENTS.md`](AGENTS.md) / `.agents/skills/` | Instrucciones para agentes de código (Claude Code, Codex, Cursor, etc.). |
+
+Solo Andrés opera la cuenta de AWS. Todos los demás desarrollan y prueban en local (DuckDB + proveedor LLM `mock`) contra `INTERFACES.md`.
+
+## Componentes preexistentes
+
+Los archivos de coordinación (`RUNBOOK.md`, `STATUS.md`, `DECISIONS.md`, `INTERFACES.md`, `AGENTS.md`, `CLAUDE.md`), las skills de agentes en `.agents/skills/`, el contrato del `Makefile`, el workflow de CI, `.gitattributes`, `scripts/licences.py` y las plantillas en `templates/` se adaptaron del repositorio de preparación previo del equipo, `nextwave-kit`. Se copiaron archivos; no se comparte historial de git.
