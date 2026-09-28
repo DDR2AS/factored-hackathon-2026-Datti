@@ -11,7 +11,7 @@ Committed home for knowledge every agent session in this repo needs: how to buil
 
 ## Sharp edges
 
-- **No AWS.** Only andres operates the AWS account. Never ask for AWS credentials, never add deploy steps, never call AWS services directly from app code; use the local backends behind the interfaces (DuckDB for data, `mock` for the LLM).
+- **AWS by request, through CDK only.** andres administers the AWS account; teammates don't have access yet. Build and test locally with the backends behind the interfaces (DuckDB for data, `mock` for the LLM). When work needs deploying, the teammate asks andres for an IAM user and deploys through the repo's CDK code; never through the console or ad-hoc scripts. Don't invent deploy steps before then, and never call AWS services directly from app code.
 - **No secrets or data in git.** `.env` is ignored; `.env.test` is the empty template. `data/`, `*.duckdb`, `*.csv`, `*.parquet` are ignored.
 - **`.gitignore` also ignores every `*.json` and the folders `src/agent/` and `src/analysis/`.** Files there are silently not committed. Don't put shared code there; check `git status` after creating JSON files.
 - **Windows.** Several teammates use Windows without `make`. Every Makefile target wraps a plain `python ...` command; run it directly. Use `PYTHON=python make <target>` where `python3` doesn't exist.

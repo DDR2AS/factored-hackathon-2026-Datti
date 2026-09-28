@@ -40,7 +40,7 @@ flowchart LR
     ORCH --> TR[data/traces JSONL]
 ```
 
-## Cloud (operated by andres only)
+## Cloud (deployed with CDK; access by request to andres)
 
 ```mermaid
 flowchart TD

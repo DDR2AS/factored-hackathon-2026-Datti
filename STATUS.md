@@ -12,3 +12,4 @@ Who is one of: `andres`, `arturo`, `cristhian`, `diego`.
 - 2026-09-28T03:30Z  andres  claimed AWS platform: CDK skeleton, Cognito, API Gateway, chat Lambda, DynamoDB, Bedrock access; nobody else needs AWS credentials, build against INTERFACES.md locally
 - 2026-09-28T03:30Z  andres  open question for the team: .gitignore ignores all *.json and src/agent/ + src/analysis/; agree Monday whether to narrow it (schemas, cdk.json and package.json will need to be committed)
 - 2026-09-28T03:30Z  andres  open question for the team: requirements.txt lists openai; plan v2 uses Claude on Bedrock through the LLM client in INTERFACES.md; agree Monday whether to drop it
+- 2026-09-28T03:55Z  andres  correction to my earlier claim: I administer AWS and set up the CDK skeleton, but I'm not the only one who will deploy; when your work needs AWS, ask me for an IAM user and deploy through CDK (see DECISIONS.md D10 correction)

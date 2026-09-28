@@ -65,8 +65,10 @@ breadth**; more workflows earn no bonus. The brief requires:
 
 ## 4. Rules that constrain how we work
 
-- **AWS is operated only by Andrés.** Nobody else has access to the AWS account, and nobody should
-  ask for AWS credentials or try to deploy. Build and test locally; Andrés deploys.
+- **AWS access is by request, and every AWS change goes through CDK.** Andrés administers the
+  account. For now only he has access, so build and test locally. When your work needs to be
+  deployed, ask Andrés for an IAM user; the deploy then happens through the CDK code in this repo,
+  never by hand in the AWS console. Deployment instructions will be added when that moment comes.
 - **Never commit secrets or data.** Credentials live in your local `.env` (copy `.env.test`). The
   organizer's read-only S3 key is in the data dictionary PDF; it goes in `.env`, never in git.
   `data/`, `*.duckdb`, `*.csv`, `*.parquet` are git-ignored on purpose.
@@ -81,7 +83,7 @@ breadth**; more workflows earn no bonus. The brief requires:
 
 Everything must run on a laptop without AWS:
 
-| Need | Local | Cloud (Andrés) |
+| Need | Local | Cloud (via CDK) |
 | --- | --- | --- |
 | Raw data | `python src/etl/ingest_s3_duckdb.py` downloads the organizer bucket into `data/raw/` and builds `data/processed/latam_bank.duckdb` | S3 in our account |
 | Pipeline, gold tables | DuckDB functions, one partition at a time | Same code inside Lambda + Step Functions |
@@ -90,7 +92,7 @@ Everything must run on a laptop without AWS:
 | Training, evaluation | `make train`, `make eval` on your machine | SageMaker training job, Bedrock batch |
 
 Write code against the interfaces in `INTERFACES.md`, never against AWS services directly. That is
-what lets Andrés swap the backend without touching your code.
+what lets the same code run on a laptop and in the cloud with only the backend changing.
 
 `make` is not installed on Windows by default. Every Makefile target prints or wraps a plain
 command; run that command directly if you don't have `make`.

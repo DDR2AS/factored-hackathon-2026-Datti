@@ -51,7 +51,7 @@ python src/etl/ingest_s3_duckdb.py
 | [`docs/architecture.md`](docs/architecture.md) | Arquitectura en Mermaid (flujo, local, nube). |
 | [`AGENTS.md`](AGENTS.md) / `.agents/skills/` | Instrucciones para agentes de código (Claude Code, Codex, Cursor, etc.). |
 
-Solo Andrés opera la cuenta de AWS. Todos los demás desarrollan y prueban en local (DuckDB + proveedor LLM `mock`) contra `INTERFACES.md`.
+Andrés administra la cuenta de AWS. Por ahora el resto del equipo no tiene acceso: desarrollamos y probamos en local (DuckDB + proveedor LLM `mock`) contra `INTERFACES.md`. Cuando haya que desplegar, se pide un usuario IAM a Andrés y todo cambio en AWS se hace con CDK, nunca a mano en la consola.
 
 ## Componentes preexistentes
 

@@ -1,7 +1,7 @@
 # Contract: fill in target bodies as the work lands, but never rename these targets.
 # CI calls install, lint, test, build and licences by name.
 # Windows without make: run the command inside each target directly.
-# Deployment targets are intentionally absent: only andres deploys (DECISIONS.md D10).
+# Deployment targets come later: AWS changes go through CDK, with an IAM user requested from andres (DECISIONS.md D10, corrected).
 
 PYTHON ?= python3
 

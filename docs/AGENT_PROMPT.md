@@ -23,7 +23,7 @@ I'm <your name>, a member of team Datti in the Factored AI & Data Hackathon 2026
    Don't write code or commit anything until I confirm.
 
 Rules for all our work together:
-- AWS: only andres operates the AWS account. Never ask me for AWS credentials, never deploy, never add deploy steps, never call AWS services from app code. The only AWS call we make is downloading the organizer's dataset with src/etl/ingest_s3_duckdb.py, using the organizer's read-only key in my local .env.
+- AWS: andres administers the AWS account and I don't have access yet. Build and test locally. When my work needs to be deployed, I'll ask andres for an IAM user and we'll deploy through the CDK code in the repo, never by hand in the AWS console. Until then, don't write deploy steps and don't call AWS services from app code. Today the only AWS call we make is downloading the organizer's dataset with src/etl/ingest_s3_duckdb.py, using the organizer's read-only key in my local .env.
 - Build locally against INTERFACES.md with the local backends: DuckDB for data, the mock provider in src/llm for model calls. Never hard-code a model ID or provider.
 - Secrets and data never go into git: .env is ignored (.env.test is the empty template); data/, *.duckdb, *.csv, *.parquet are ignored. Careful: .gitignore also ignores every *.json and the folders src/agent/ and src/analysis/, so files there are silently not committed. Check git status after creating files.
 - Before starting any unit of work, follow claim-before-build: pull, read STATUS/DECISIONS/INTERFACES, then append a one-line claim to STATUS.md and commit it straight to main.

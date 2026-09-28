@@ -166,7 +166,7 @@ svg .ms{fill:var(--ink)}
 <tr><td class="mono">D7</td><td>Evaluate on planted scenarios over real transactions, plus team-written test messages. Baseline is the v1.4 rules-only version.</td><td>Real complaints can't be linked to transactions, so ground truth has to be planted. The baseline shows what ML and GenAI add.</td><td><a href="#eval">11</a></td></tr>
 <tr><td class="mono">D8</td><td>Deploy from day one: a walking skeleton goes live Mon 28 Sep and every day ends with the deployed URL working.</td><td>Deployment is a deliverable. A late first deploy is the most common way to lose the demo.</td><td><a href="#schedule">13</a></td></tr>
 <tr><td class="mono">D9</td><td>Cut push notifications, the GCP plan B and most extra intent classes. "Create your own customer" becomes a stretch goal.</td><td>Frees about two person-days for ML, the investigator and evaluation.</td><td><a href="#risks">15</a></td></tr>
-<tr><td class="mono">D10</td><td>Only Andrés operates AWS. Everyone else builds and tests locally against the interfaces, with DuckDB for data and a mock LLM provider.</td><td>The team has no access to the AWS account yet. Local backends keep everyone productive, and one person owns every deploy.</td><td><a href="#workflow">14</a></td></tr>
+<tr><td class="mono">D10</td><td>Andrés administers the AWS account. Teammates have no access yet and build locally against the interfaces (DuckDB for data, a mock LLM provider). When someone needs to deploy, they ask Andrés for an IAM user and deploy through CDK. Every AWS change is CDK code in the repo, never a manual console change.</td><td>Access is granted when it's needed, not up front. CDK keeps every deploy reviewable and reproducible, whoever runs it.</td><td><a href="#workflow">14</a></td></tr>
 <tr><td class="mono">D11</td><td>Adopt the coordination practice from the team's <code>nextwave-kit</code>: work claims, append-only decision log, in-place interface contracts, four agent skills, fixed Makefile targets, licence inventory.</td><td>Four people and several coding agents work in parallel from day one; hand-offs need a written contract.</td><td><a href="#workflow">14</a></td></tr>
 </tbody></table></div>
 
@@ -534,7 +534,7 @@ svg .ms{fill:var(--ink)}
 <tr><td>Infrastructure as code</td><td>AWS CDK (Python) + GitHub Actions with OIDC</td><td>Terraform, SAM</td><td>One language across the team; no AWS keys in the repo</td></tr>
 </tbody></table></div>
 
-<div class="decision"><span class="id">D10</span><p>Only Andrés has access to the AWS account. Teammates never deploy or hold AWS credentials; they write code against the interfaces with local backends, and Andrés moves it into the cloud. The same pipeline, gateway, model and LLM code runs in both places; only the backend behind each interface changes.</p></div>
+<div class="decision"><span class="id">D10</span><p>Andrés administers the account and sets up the CDK skeleton. Teammates start without AWS access and build against the interfaces with local backends. When a teammate's slice needs the cloud, they request an IAM user from Andrés and deploy it through the repo's CDK code. Nobody changes AWS by hand in the console. The same pipeline, gateway, model and LLM code runs locally and in the cloud; only the backend behind each interface changes.</p></div>
 
 <h3>Things serverless makes you handle</h3>
 <ul>
@@ -650,11 +650,11 @@ svg .ms{fill:var(--ink)}
 <div class="tw mid"><table>
 <thead><tr><th>Person</th><th>Owns</th><th>Main deliverables</th></tr></thead>
 <tbody>
-<tr><td><strong>Andrés</strong> · platform and agent runtime · <em>only person with AWS access</em></td><td>All AWS work: CDK stacks, deploys, Cognito, DynamoDB, Bedrock, running the pipeline in Lambda and Step Functions, SageMaker and Bedrock batch runs. Also the gateway, the LLM client, the case lifecycle, the investigator, observability, cost controls, failure switches</td><td>Deployed URL every day, audited gateway, investigator running, cloud runs of the team's code, budget under control</td></tr>
+<tr><td><strong>Andrés</strong> · platform and agent runtime · <em>AWS account admin</em></td><td>AWS account and CDK skeleton; grants IAM users when teammates need to deploy. Until then, runs the cloud side: Cognito, DynamoDB, Bedrock, the pipeline in Lambda and Step Functions, SageMaker and Bedrock batch runs. Also the gateway, the LLM client, the case lifecycle, the investigator, observability, cost controls, failure switches</td><td>Deployed URL every day, audited gateway, investigator running, cloud runs of the team's code, budget under control</td></tr>
 <tr><td><strong>Diego</strong> · data engineering</td><td>Pipeline as local Python and DuckDB, one partition at a time; gold tables; serving-table export; scenario generator; trace queries</td><td>Pipeline that runs locally and unchanged in Lambda, gold schemas, 240 planted scenarios</td></tr>
 <tr><td><strong>Cristhian</strong> · ML and evaluation</td><td>M1, M2, M3, calibration, evaluation harness, judge validation; all runnable locally with the mock LLM</td><td>Versioned models, <code>make train</code> and <code>make eval</code> that Andrés can run against Bedrock, evaluation report</td></tr>
 <tr><td><strong>Arturo</strong> · product and conversation</td><td>State machine, YAML rules, G1 prompts, degraded mode, coordination, README, slides, video</td><td>Three lanes working locally and on the deployed URL, rules tested, demo script, final submission</td></tr>
-<tr><td><strong>Arturo + Diego</strong> · front end</td><td>Chat, live case card, analyst console, trace view, evaluation page, judge mode, built against the local API</td><td>All screens working locally; Andrés deploys them</td></tr>
+<tr><td><strong>Arturo + Diego</strong> · front end</td><td>Chat, live case card, analyst console, trace view, evaluation page, judge mode, built against the local API</td><td>All screens working locally, then deployed through CDK</td></tr>
 </tbody></table></div>
 
 <figure>
@@ -722,7 +722,7 @@ svg .ms{fill:var(--ink)}
 
 <h3>Day by day</h3>
 <div class="tw wide"><table>
-<thead><tr><th>Day</th><th>Goal</th><th>Platform · Andrés</th><th>Data · Diego</th><th>ML and eval · Cristhian</th><th>Backend · Arturo</th><th>Front · Arturo + Diego</th><th>Live on AWS by night (Andrés deploys)</th></tr></thead>
+<thead><tr><th>Day</th><th>Goal</th><th>Platform · Andrés</th><th>Data · Diego</th><th>ML and eval · Cristhian</th><th>Backend · Arturo</th><th>Front · Arturo + Diego</th><th>Live on AWS by night</th></tr></thead>
 <tbody>
 <tr><td class="num"><strong>Sun 27</strong><br>M0</td><td>Agree on v2</td><td>Bedrock model access form; account plan and quotas; budget alarms; CDK bootstrap; coordination files pushed to the team repo</td><td>Review pipeline and gold tables v2 needs; commit the analysis queries</td><td>Nine-class taxonomy; labeling guide; M1 data design</td><td>Walk the team through v2; confirm decisions D1–D11 at Monday stand-up</td><td>Demo script: six customers × expected outcome</td><td>Nothing yet; accounts ready</td></tr>
 <tr><td class="num"><strong>Mon 28</strong></td><td>Foundations</td><td>CDK: S3 + CloudFront, API Gateway, chat Lambda, DynamoDB, Cognito; deploy from his machine (CI deploy later); first Bedrock call; LLM client with <code>mock</code> and <code>bedrock</code> providers</td><td>Gold schemas in <code>docs/data/gold_tables.md</code>; pipeline refactored into <code>run_partition(table, date)</code> functions writing local Parquet</td><td>M1 training data generator; 300 ES/PT phrases; team writes 50 of the 150 test messages</td><td>State machine v1, YAML lane rules, case record schema, templates</td><td>Chat shell calling the local API; judge-mode landing page</td><td><strong>Walking skeleton</strong>: public URL, sign-in, chat round trip through Lambda and Bedrock</td></tr>
@@ -750,13 +750,13 @@ svg .ms{fill:var(--ink)}
 <tr><td><code>INTERFACES.md</code></td><td>Edited in place; one current shape per boundary. A merge conflict means stop and talk to the owner</td><td>Eight hand-offs are defined before Monday: chat API, gateway tools, case record, model I/O, gold tables, investigator report, trace event, LLM client</td></tr>
 <tr><td><code>.gitattributes</code></td><td>Union merge for <code>STATUS.md</code> and <code>DECISIONS.md</code></td><td>Simultaneous appends never conflict</td></tr>
 <tr><td><code>.agents/skills/</code> (copied to <code>.claude/skills/</code>)</td><td><code>claim-before-build</code>, <code>boundary-conflict-stop</code>, <code>decision-capture</code>, <code>hold-under-fire</code></td><td>Coding agents follow the same rules as people. <code>hold-under-fire</code> now includes the brief's failure cases</td></tr>
-<tr><td><code>Makefile</code> + CI</td><td>Fixed target names (<code>install lint test build licences ci</code>, plus <code>data validate pipeline train eval up</code>); fill bodies, never rename. No deploy targets</td><td>Reproducible setup; judges run the same commands. On Windows, run the command inside each target</td></tr>
+<tr><td><code>Makefile</code> + CI</td><td>Fixed target names (<code>install lint test build licences ci</code>, plus <code>data validate pipeline train eval up</code>); fill bodies, never rename. Deploy targets arrive with the CDK code</td><td>Reproducible setup; judges run the same commands. On Windows, run the command inside each target</td></tr>
 <tr><td><code>scripts/licences.py</code> → <code>LICENCES.md</code></td><td>Offline inventory of every third-party dependency</td><td>README's third-party section comes for free</td></tr>
 <tr><td><code>docs/architecture.md</code>, <code>templates/</code></td><td>Mermaid architecture; final README and pitch templates</td><td>Documentation is a judging criterion</td></tr>
 </tbody></table></div>
-<h3>Local-first, because only Andrés has AWS</h3>
+<h3>Local-first until AWS access is needed</h3>
 <div class="tw mid"><table>
-<thead><tr><th>Need</th><th>Teammates, locally</th><th>Andrés, in AWS</th></tr></thead>
+<thead><tr><th>Need</th><th>Locally (everyone, from day one)</th><th>In AWS (through CDK)</th></tr></thead>
 <tbody>
 <tr><td>Raw data</td><td><code>make data</code>: organizer bucket → <code>data/raw</code> → local DuckDB (Diego's script)</td><td>Our S3 copy</td></tr>
 <tr><td>Pipeline and gold</td><td>DuckDB functions, one partition at a time</td><td>Same functions inside Lambda + Step Functions</td></tr>
@@ -830,7 +830,7 @@ svg .ms{fill:var(--ink)}
 <li>Everyone reads <code>RUNBOOK.md</code> and pastes the team prompt into their coding agent. Confirm or correct D1–D11 and the eight interfaces at the Monday 09:00 stand-up.</li>
 <li>AWS: confirm the account isn't on the restricted free plan; submit the Anthropic use-case form in Bedrock; enable Haiku 4.5, Sonnet 5, Opus 5 and a multilingual embedding model in us-east-2 or through US inference profiles; check tokens-per-minute quotas.</li>
 <li>Budget alarms at 50, 100 and 150 USD.</li>
-<li>Repo <code>DDR2AS/factored-hackathon-2026-Datti</code> has the coordination files, skills, Makefile, CI and this plan. Keep credential files and the data dictionary PDF (it contains the organizer's read-only key) out of git. The GitHub OIDC deploy role comes later and only Andrés uses it.</li>
+<li>Repo <code>DDR2AS/factored-hackathon-2026-Datti</code> has the coordination files, skills, Makefile, CI and this plan. Keep credential files and the data dictionary PDF (it contains the organizer's read-only key) out of git. AWS access for teammates comes later: they request an IAM user from Andrés and deploy through CDK.</li>
 <li><code>cdk bootstrap</code> in us-east-2.</li>
 <li>Commit the queries behind the v1.4 findings.</li>
 <li>Confirm the exact submission time on 5 Oct.</li>
