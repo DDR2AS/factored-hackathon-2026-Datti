@@ -67,8 +67,9 @@ breadth**; more workflows earn no bonus. The brief requires:
 
 - **AWS access is by request, and every AWS change goes through CDK.** Andrés administers the
   account. For now only he has access, so build and test locally. When your work needs to be
-  deployed, ask Andrés for an IAM user; the deploy then happens through the CDK code in this repo,
-  never by hand in the AWS console. Deployment instructions will be added when that moment comes.
+  deployed, ask Andrés for an IAM user; the deploy then happens through the CDK code in `infra/`,
+  never by hand in the AWS console. Infrastructure changes are pull requests to `infra/`; you can
+  run `cdk synth` and the infra tests without AWS credentials (see `infra/README.md`).
 - **Never commit secrets or data.** Credentials live in your local `.env` (copy `.env.test`). The
   organizer's read-only S3 key is in the data dictionary PDF; it goes in `.env`, never in git.
   `data/`, `*.duckdb`, `*.csv`, `*.parquet` are git-ignored on purpose.
@@ -91,7 +92,9 @@ Everything must run on a laptop without AWS:
 | LLM calls | `mock` provider with fixed fixtures | Bedrock (Haiku 4.5, Sonnet 5, Opus 5) |
 | Training, evaluation | `make train`, `make eval` on your machine | SageMaker training job, Bedrock batch |
 
-Write code against the interfaces in `INTERFACES.md`, never against AWS services directly. That is
+Application code reads its configuration only from the environment variables in `INTERFACES.md` #9
+(set by CDK in AWS, by your `.env` locally). Write code against the interfaces in `INTERFACES.md`,
+never against AWS services directly. That is
 what lets the same code run on a laptop and in the cloud with only the backend changing.
 
 `make` is not installed on Windows by default. Every Makefile target prints or wraps a plain
@@ -108,6 +111,7 @@ The repository is the shared coordination bus for people and agents.
   conflict there means stop and talk to the owner.
 - Coordination files (`STATUS.md`, `DECISIONS.md`, `INTERFACES.md`) are committed straight to `main`.
   Code goes through a feature branch and a pull request.
+- `infra/` is the AWS CDK app (Python): every AWS resource, one isolated stage per developer.
 - `.agents/skills/` holds four behaviours for coding agents (also copied to `.claude/skills/`):
   `claim-before-build`, `boundary-conflict-stop`, `decision-capture`, `hold-under-fire`.
 - Daily: 15-minute stand-up at 09:00, internal demo of what works at 21:00.

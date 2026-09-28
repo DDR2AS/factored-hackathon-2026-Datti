@@ -49,6 +49,7 @@ python src/etl/ingest_s3_duckdb.py
 | [`INTERFACES.md`](INTERFACES.md) | Contratos entre dueños (API, gateway, caso, modelos, tablas gold, reporte del investigador, trazas, cliente LLM). |
 | [`STATUS.md`](STATUS.md) | Reclamar trabajo antes de construirlo. |
 | [`docs/architecture.md`](docs/architecture.md) | Arquitectura en Mermaid (flujo, local, nube). |
+| [`infra/README.md`](infra/README.md) | Infraestructura como código (AWS CDK en Python): stacks, stages por desarrollador, cómo proponer cambios. |
 | [`AGENTS.md`](AGENTS.md) / `.agents/skills/` | Instrucciones para agentes de código (Claude Code, Codex, Cursor, etc.). |
 
 Andrés administra la cuenta de AWS. Por ahora el resto del equipo no tiene acceso: desarrollamos y probamos en local (DuckDB + proveedor LLM `mock`) contra `INTERFACES.md`. Cuando haya que desplegar, se pide un usuario IAM a Andrés y todo cambio en AWS se hace con CDK, nunca a mano en la consola.

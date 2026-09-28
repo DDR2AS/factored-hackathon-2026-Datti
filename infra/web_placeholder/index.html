@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expediente Vivo</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 48px 16px; background: #f4f6f5; color: #16202a; }
+  main { max-width: 640px; margin: 0 auto; }
+  code { background: #eceff3; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Expediente Vivo</h1>
+  <p>Infraestructura desplegada. El front end todavía no se ha publicado: cuando exista <code>frontend/dist</code>, CDK lo sube en lugar de esta página.</p>
+  <p>Estado de la API: <code id="health">consultando…</code></p>
+</main>
+<script>
+  fetch('/api/health')
+    .then(function (r) { return r.json(); })
+    .then(function (b) { document.getElementById('health').textContent = JSON.stringify(b); })
+    .catch(function () { document.getElementById('health').textContent = 'sin respuesta'; });
+</script>
+</body>
+</html>

@@ -33,3 +33,9 @@ proposal.txt
 .DS_Store
 .vscode/
 .idea/
+
+# CDK (infra/): keep the app config, ignore build output
+infra/cdk.out/
+!infra/cdk.json
+!infra/cdk.context.json
+node_modules/

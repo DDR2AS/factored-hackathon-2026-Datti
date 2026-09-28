@@ -101,3 +101,18 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Providers: `mock` (default locally; returns fixtures from `tests/fixtures/llm/`, deterministic) and `bedrock` (cloud, andres). Tool use for the investigator goes through the same package.
   - Timeout 8 s for `chat`; callers handle `model_timeout` with templates.
 - **Last changed:** 2026-09-28T03:30Z
+
+## 9. Runtime environment variables (infrastructure ↔ application code)
+
+- **Owner:** andres (defined in `infra/stacks/`; every Lambda handler reads them)
+- **Status:** Proposed
+- **Current shape:** application code reads configuration only from these variables (locally from `.env`, in AWS set by CDK). Adding or renaming one is an interface change.
+  - All functions: `STAGE`
+  - Data (`DataStack.table_environment`): `TABLE_SESSIONS`, `TABLE_CASES`, `TABLE_SERVING`, `TABLE_DEMO`, `BUCKET_LAKE`, `BUCKET_ARTIFACTS`, `BUCKET_TRACES`, `GLUE_DATABASE`, `ATHENA_WORKGROUP`
+  - Models (`common.model_environment`): `LLM_PROVIDER` (`mock` locally, `bedrock` in AWS), `MODEL_CHAT`, `MODEL_INVESTIGATOR`, `MODEL_JUDGE`
+  - API only: `CASE_STATE_MACHINE_ARN`, `SLA_SCHEDULE_GROUP`, `SLA_SCHEDULER_ROLE_ARN`, `SLA_TARGET_FUNCTION_ARN`, `SESSION_TTL_MINUTES` (15), `LLM_TIMEOUT_SECONDS` (8)
+  - Investigator only: `INVESTIGATOR_MAX_TOOL_CALLS` (12)
+  - Pipeline only: `BUCKET_RAW`
+  - Lambda entry points: `src/handlers/api.handler`, `investigator.handler`, `case_steps.handler` (actions `register_task_token`, `mark_incomplete`, `notify_customer`, `sla_timer`), `pipeline.handler` (event `{table, date}`)
+  - HTTP routes are served under `/api/*` by CloudFront; CloudFront strips the prefix, so the API itself keeps the routes in #1. Analyst routes are `GET /analyst/cases`, `GET /analyst/cases/{case_id}`, `POST /analyst/cases/{case_id}/decision` and require a Cognito JWT.
+- **Last changed:** 2026-09-28T04:40Z

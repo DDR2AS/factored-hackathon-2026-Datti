@@ -1,11 +1,14 @@
 # Contract: fill in target bodies as the work lands, but never rename these targets.
 # CI calls install, lint, test, build and licences by name.
 # Windows without make: run the command inside each target directly.
-# Deployment targets come later: AWS changes go through CDK, with an IAM user requested from andres (DECISIONS.md D10, corrected).
+# AWS changes go through CDK in infra/ (DECISIONS.md D12). synth and infra-test need no AWS
+# credentials; diff, deploy and destroy need an IAM user from andres (D10, corrected).
 
 PYTHON ?= python3
+STAGE ?= dev
+PROFILE ?= expvivo
 
-.PHONY: install lint test build licences ci data validate pipeline train eval up
+.PHONY: install lint test build licences ci data validate pipeline train eval up \n	infra-install infra-test synth diff deploy destroy
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -43,3 +46,24 @@ eval:  # cristhian: planted scenarios and test messages against baselines
 
 up:  # arturo: run the API and front end locally with duckdb + mock LLM
 	@printf '%s\n' 'up: not implemented yet (arturo)'
+
+# Infrastructure (infra/README.md). Use your own stage: make synth STAGE=dev-<yourname>
+
+infra-install:  # everyone: CDK CLI (Node) and CDK Python libraries
+	npm install -g aws-cdk
+	$(PYTHON) -m pip install -r infra/requirements-dev.txt
+
+infra-test:  # everyone, no AWS credentials needed
+	cd infra && $(PYTHON) -m pytest -q tests
+
+synth:  # everyone, no AWS credentials needed
+	cd infra && cdk synth -c stage=$(STAGE)
+
+diff:  # needs an IAM user from andres
+	cd infra && cdk diff --all -c stage=$(STAGE) --profile $(PROFILE)
+
+deploy:  # needs an IAM user from andres; dev and prod only after agreeing with andres
+	cd infra && cdk deploy --all -c stage=$(STAGE) --profile $(PROFILE)
+
+destroy:  # removes a personal stage; never prod
+	cd infra && cdk destroy --all -c stage=$(STAGE) --profile $(PROFILE)

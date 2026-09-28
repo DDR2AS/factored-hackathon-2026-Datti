@@ -1,0 +1,25 @@
+{
+  "app": "python app.py",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["README.md", "cdk*.json", "requirements*.txt", "**/__pycache__", "tests"]
+  },
+  "context": {
+    "stage": "dev",
+    "region": "us-east-2",
+    "rawBucket": "factored-hackathon-raw-data",
+    "models": {
+      "chat": "anthropic.claude-haiku-4-5",
+      "investigator": "anthropic.claude-sonnet-5",
+      "judge": "anthropic.claude-opus-5"
+    },
+    "allowedOrigins": ["*"],
+    "bundle": false,
+    "warmup": false,
+    "withAccess": false,
+    "deployers": [],
+    "createBudget": false,
+    "budgetLimitsUsd": [50, 100, 150],
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

@@ -9,6 +9,13 @@ The inventory is generated locally from dependency manifests and available local
 
 Licence values come only from metadata already present on this machine; no network lookup was performed.
 
+### `infra/requirements.txt` (Python)
+
+| Dependency | Declaration | Licence |
+| --- | --- | --- |
+| aws-cdk-lib | aws-cdk-lib==2.271.0 | Apache-2.0 |
+| constructs | constructs>=10.0.0,<11.0.0 | Apache-2.0 |
+
 ### `requirements.txt` (Python)
 
 | Dependency | Declaration | Licence |
