@@ -1,13 +1,13 @@
 # Expediente Vivo v2: complaint and dispute handling with controlled AI
 
 > **Nota para el equipo (borrar antes de entregar).** Borrador del README final del repo público
-> `factored-hackathon-2026-Datti`, escrito el 29 sep sobre el HEAD `5867ac1` de la rama `arturo/lane-b`
-> del repo personal de Arturo. Sigue `templates/README.md` pero va ordenado por los criterios de evaluación
+> `factored-hackathon-2026-Datti`, escrito el 29 sep (rama `arturo/m1-chat-api-front`; se verificó en el repo
+> personal de Arturo antes de copiarlo). Sigue `templates/README.md` pero va ordenado por los criterios de evaluación
 > (como el README ganador de 2023). Reglas del borrador:
 > - Cada número tiene fuente (documento o comando). Lo que no está medido dice `TODO(<nombre>)`.
 > - `UNVERIFIED` = existe en el código o en el plan pero nadie lo probó (todo lo de AWS, hoy).
-> - Las rutas `src/conversation/...`, `frontend/...` y `scripts/...` existen en el repo personal y llegan al
->   repo del equipo con los PRs de `docs/pasar_al_repo_del_equipo.md`. Los análisis v1.4
+> - Las rutas `src/conversation/...`, `frontend/...` y `scripts/...` llegan con la rama
+>   `arturo/m1-chat-api-front`. Los análisis v1.4
 >   (`docs/analisis_quejas.md`, `docs/hallazgos.md`, `docs/hallazgos_detalle.md`, `docs/dq_report.md`) hoy
 >   solo están en el repo personal: `TODO(Diego, Arturo)` decidir si se copian o se reemplazan por los de
 >   Diego para que los enlaces funcionen.

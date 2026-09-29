@@ -4,7 +4,7 @@ Expediente Vivo v2, repo del equipo. Todo es local: no llama a AWS ni a ningún 
 
 ## Requisitos
 
-- Python 3.12 con el venv del repo (`.venv`, ya tiene pydantic, PyYAML y pytest). El código también compila en 3.11, pero en esta máquina solo se ejecutó en 3.12.
+- Python 3.12 (la Lambda corre 3.12; la suite también pasa en 3.11, que usa el CI). En un clon limpio, crear el venv una vez: `py -3.12 -m venv .venv` (o `python -m venv .venv`), activarlo y `python -m pip install -r requirements.txt`.
 - Node 24 (o 22.22+) para el front (hay Node 24 instalado).
 
 En Git Bash, desde la raíz del repo:
@@ -12,7 +12,7 @@ En Git Bash, desde la raíz del repo:
 ```bash
 source .venv/Scripts/activate
 export PATH="$PATH:/c/Program Files/nodejs"
-.env.test es la plantilla: cp .env.test .env        # opcional; sin .env usa los mismos valores por defecto
+cp .env.test .env        # opcional: .env.test es la plantilla; sin .env usa los mismos valores por defecto. No hagas `source .env`
 ```
 
 ## Levantar la API
@@ -21,7 +21,7 @@ export PATH="$PATH:/c/Program Files/nodejs"
 python scripts/local_api.py --port 8000
 ```
 
-- Health: http://127.0.0.1:8000/api/health → `{"status":"ok","stage":"local","deps":"ok"}`.
+- Health: http://127.0.0.1:8000/api/health → `{"status":"ok","stage":"local","deps":"ok","demo_clock_scale":…}`.
 - Corre el mismo `src/handlers/api.py` que la Lambda. Imita a CloudFront (quita `/api`) y a API Gateway (resuelve la ruta y arma el evento v2). Una ruta que no existe da 404 `{"message":"Not Found"}`.
 - También sirve `frontend/dist` en `/`, si ya se hizo el build.
 - Sesiones y casos viven en memoria y se pierden al reiniciar. Las trazas quedan en `data/traces/<fecha>.jsonl`.
@@ -76,7 +76,7 @@ Hay dos formas:
 ## Entrar a la consola del analista
 
 1. Levantar la API con el front ya compilado: `python scripts/local_api.py --port 8000 --investigation-delay 2`.
-2. Copiar el token que imprime la tercera línea ("Consola del analista: … token generado para esta ejecución: …"). Para uno fijo, poner `LOCAL_ANALYST_TOKEN=<algo largo>` en `.env` (nunca se commitea). Solo `scripts/local_api.py` conoce ese nombre: `src/` no tiene bypass; el script imita al autorizador JWT de Cognito, valida `Authorization: Bearer <token>` en `/api/analyst/*` e inyecta los claims `{sub: "analista-local", email: "analista@demo.local"}`. Sin token o con uno equivocado: 401 `{"message":"Unauthorized"}`, como API Gateway.
+2. Copiar el token de la línea que empieza con "Consola del analista:" ("… token generado para esta ejecución: …"). Para uno fijo, poner `LOCAL_ANALYST_TOKEN=<algo largo>` en `.env` (nunca se commitea). Solo `scripts/local_api.py` conoce ese nombre: `src/` no tiene bypass; el script imita al autorizador JWT de Cognito, valida `Authorization: Bearer <token>` en `/api/analyst/*` e inyecta los claims `{sub: "analista-local", email: "analista@demo.local"}`. Sin token o con uno equivocado: 401 `{"message":"Unauthorized"}`, como API Gateway.
 3. Abrir http://127.0.0.1:8000/#/consola (o el botón "Abrir consola del analista" del panel del juez, que abre otra pestaña), elegir "Token de analista local" y pegarlo. El token queda en memoria y en `sessionStorage` de esa pestaña; "Salir" lo borra. Si la API se reinicia, el token viejo da 401 y la consola pide entrar de nuevo sin perder el borrador.
 4. Cognito (nube) aparece como "no habilitado": falta que Andrés habilite `USER_PASSWORD_AUTH`, cree un usuario analista demo y agregue el dominio de Cognito a la CSP.
 

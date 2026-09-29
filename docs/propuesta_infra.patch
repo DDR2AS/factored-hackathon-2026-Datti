@@ -2,7 +2,7 @@ PROPUESTA (NO APLICADA) de cambios minimos a infra/ del repo del equipo, para qu
 antes del despliegue del 29 sep 2026 por la noche. Nadie la aplico en ningun repo.
 
 Base: repo del equipo en f753eb8 (clon local de Arturo, sin fetch). Si main avanzo, revisar antes.
-Detalle, pruebas y razones: docs/verificacion_cdk.md (repo personal de Arturo).
+Detalle, pruebas y razones: docs/verificacion_cdk.md (en esta misma rama).
 
 Que cambia:
   cdk.json, stacks/config.py  contexto nuevo: apiStore (memory), apiLlmProvider (none),

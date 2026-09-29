@@ -129,5 +129,5 @@ Nuevos avisos:
 
 ## Rutas
 
-- Copia de trabajo: `C:\Users\Arturo\AppData\Local\Temp\claude\C--Users-Arturo-Documents-Factored-Hackathon\10de4925-349c-4876-b105-aacaf0c9f9f2\scratchpad\cdk_check\` (`team/` con la propuesta aplicada, `team_orig/infra` sin cambios, `lambda_pkg/`, `sim/` con `invoke.py`, `run_local.py`, `smoke.log`, `o/` con el synth con bundle).
+- Copia de trabajo: una carpeta temporal fuera del repo, `cdk_check/` (`team/` con la propuesta aplicada, `team_orig/infra` sin cambios, `lambda_pkg/`, `sim/` con `invoke.py`, `run_local.py`, `smoke.log`, `o/` con el synth con bundle).
 - Propuesta: `docs/propuesta_infra.patch`.
