@@ -1,0 +1,12 @@
+# ESTIMACIÓN, no factura. Precios de lista por millón de tokens (USD) que usa el plan v2
+# (sección de costos) para estimar; Bedrock factura aparte y hay que confirmarlo en su página
+# de precios. Van por ROL (#8 model_role), nunca por model ID: el ID de cada rol lo pone la
+# configuración de la nube (MODEL_CHAT, MODEL_INVESTIGATOR, MODEL_JUDGE).
+# Solo lo usa el proveedor mock (conversation/llm_port.py) para llenar usage.cost_usd con
+# usage.estimated = true.
+version: "2026-09-29.1"
+estimate: true
+roles:
+  chat: {input_usd_per_mtok: 1.0, output_usd_per_mtok: 5.0}
+  investigator: {input_usd_per_mtok: 2.0, output_usd_per_mtok: 10.0}
+  judge: {input_usd_per_mtok: 5.0, output_usd_per_mtok: 25.0}

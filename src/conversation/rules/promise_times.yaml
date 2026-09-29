@@ -1,0 +1,34 @@
+# Promise and clock times for cases (owner: arturo). Read by src/conversation/promise.py.
+#
+# Source: v1.4 complaints analysis (docs/analisis_quejas.md section 7 and
+# docs/proyecto_expediente_vivo.md): resolution time of formal complaints, median 16 days,
+# p90 28 days; contractual SLA 15 days (signal_checks: median by priority 15-16 days, so the
+# SLA is tight). First human response committed within 24 h (the plan's "24 h without an
+# assignee -> alert"). Fraud queue internal SLA 2 h (analisis_quejas section 7, fast path).
+# The dataset gives no separate figures per subcategory, so every type uses the same numbers
+# until Diego's complaints_baseline (gold) provides them; then only this file changes.
+#
+# expected_basis: which figure becomes the date promised to the customer.
+#   p90_days (default): 9 of 10 historical complaints closed by then; the promise is kept
+#   in most cases, and the internal SLA (breach_at) fires well before it.
+#   median_days or sla_days are the alternatives if Arturo prefers a shorter date.
+
+version: "2026-09-28.1"
+expected_basis: p90_days
+
+default:
+  median_days: 16
+  p90_days: 28
+  sla_days: 15
+  first_response_hours: 24
+  assign_hours: 24
+  sla_alert_fraction: 0.8
+
+# Per complaint type overrides (same keys as default). Empty until complaints_baseline.
+by_complaint_type: {}
+
+# Per queue overrides for lane C (same keys as default).
+by_queue:
+  fraud:
+    first_response_hours: 2
+    assign_hours: 2
