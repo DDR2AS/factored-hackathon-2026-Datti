@@ -1,0 +1,157 @@
+# System texts in Brazilian Portuguese (owner: arturo). Rendered by src/conversation/templates.py.
+# GENERATED PORTUGUESE, WITHOUT NATIVE REVIEW. One register (você) for every country.
+# Same keys and variables as es.yaml (tests/test_templates.py). No text promises a refund or
+# compensation, or says the money will come back.
+# The demo conversation texts are SYNTHETIC; nothing here refers to a real customer.
+
+language: pt
+registers: {}
+default_register: voce
+
+texts:
+  # ---------------------------------------------------------------- start
+  welcome: "Olá, {name}. Sou o assistente de reclamações do LATAM Bank (demo com dados sintéticos). Posso verificar uma cobrança, uma tarifa ou o andamento do seu caso. O que aconteceu?"
+  clarify_intent: "Pode me contar o que aconteceu? Por exemplo: «não reconheço uma cobrança de 450 do dia 12»."
+  not_understood: "Não entendi bem. Pode me contar com outras palavras ou escolher uma opção?"
+  ask_language: "Continuamos em português ou em espanhol? / ¿Seguimos en español o en portugués?"
+
+  # ---------------------------------------------------------------- find the charge
+  ask_amount: "Você lembra o valor aproximado da cobrança?"
+  ask_date: "Em que dia foi a cobrança, mais ou menos?"
+  ask_merchant: "Você lembra em qual estabelecimento foi?"
+  ask_more_detail: "Não encontrei uma cobrança que corresponda com segurança. Pode me dar outro dado: o valor aproximado, a data ou o estabelecimento?"
+  charge_line: "{date} · {merchant} · {amount} · •••• {last4}"
+  confirm_charge: "Encontrei esta cobrança nos seus movimentos: {charge}. É esta?"
+  choose_charge: "Encontrei {n} cobranças parecidas. Qual é?"
+  none_of_these: "Entendi, não é nenhuma dessas. Pode me dar outro dado da cobrança: valor, data ou estabelecimento?"
+  no_charge_found: "Não encontrei essa cobrança nos seus movimentos. Quer revisar os dados ou falar com uma pessoa?"
+  ask_recognize: "Você reconhece esta cobrança?"
+
+  # ---------------------------------------------------------------- lane A: explained with the record
+  lane_a_recognized: "Obrigado por verificar. Como você reconhece a cobrança, não é preciso abrir um caso. Se notar algo estranho depois, é só me escrever de novo."
+  lane_a_already_reversed: "Verifiquei o registro: esta cobrança já tem um estorno aplicado em {reversal_date} no valor de {amount}. Não é preciso abrir um caso."
+  lane_a_duplicate_reversed: "Verifiquei o registro: a cobrança repetida já tem um estorno aplicado em {reversal_date}. Não é preciso abrir um caso."
+  lane_a_fee_matches: "A cobrança de {amount} corresponde à tarifa vigente do seu produto ({fee_name}: {fee_amount}). Por isso não abro um caso. Se quiser, eu te encaminho para uma pessoa."
+
+  # ---------------------------------------------------------------- lane B: case with a promised date
+  lane_b_case_open: "Abri o caso {case_id}. Uma pessoa da equipe vai analisá-lo e te dar uma primeira resposta até {first_response_by}. Data estimada de resolução: {expected_date}. Abrir o caso ainda não muda a situação da cobrança: primeiro ela é analisada."
+
+  # ---------------------------------------------------------------- lane C: a person now
+  lane_c_handoff: "Seu caso {case_id} foi encaminhado para a {queue}. Uma pessoa vai entrar em contato até {first_response_by}. Deixei o resumo do que você me contou, então você não vai precisar repetir."
+  lane_c_handoff_bare: "Seu caso {case_id} foi encaminhado para a {queue}. Uma pessoa vai entrar em contato até {first_response_by}."
+  lane_c_priority_note: "O caso ficou com prioridade alta."
+  human_request_ack: "Claro, vou te encaminhar para uma pessoa."
+  compensation_ack: "Registrei seu pedido no caso. Uma pessoa vai analisá-lo; por este canal não posso confirmar pagamentos adicionais."
+
+  # ---------------------------------------------------------------- card block (explicit yes only)
+  lost_card_intro: "Sinto muito pelo seu cartão. Primeiro posso bloqueá-lo para que ninguém o use."
+  block_offer: "Quer bloquear o cartão •••• {last4}? Se bloquear, não poderá voltar a usá-lo por este canal."
+  block_done: "Pronto. Consultei a situação do cartão •••• {last4}: agora ele aparece como bloqueado."
+  block_declined: "Entendi, não bloqueei o cartão."
+  block_failed: "Não consegui confirmar o bloqueio do cartão •••• {last4}. Vou te encaminhar para uma pessoa."
+
+  # ---------------------------------------------------------------- other intents
+  case_status: "Seu caso {case_id} está na situação «{status}». Data estimada de resolução: {expected_date}."
+  case_status_not_found: "Não encontrei um caso com esse número nesta conversa."
+  case_status_none: "Ainda não há um caso aberto nesta conversa."
+  out_of_scope: "Por este canal eu só atendo reclamações sobre cobranças, tarifas e o andamento dos seus casos, então não posso ajudar com essa solicitação. Se quiser, eu te encaminho para uma pessoa; não posso adiantar uma resposta."
+  manipulation: "Só posso ajudar com reclamações sobre suas cobranças, tarifas ou casos. O que aconteceu com seu cartão ou sua conta?"
+
+  # ---------------------------------------------------------------- session and failures
+  session_expired: "Sua sessão terminou por segurança. Para continuar, comece uma nova conversa."
+  session_limit: "Você chegou ao máximo de mensagens desta conversa. Para continuar, comece uma nova."
+  tool_unavailable: "Não consegui consultar seus movimentos agora. Tente de novo em alguns minutos ou fale com uma pessoa."
+  tool_unavailable_case: "Não consegui consultar seus movimentos agora. Abri o caso {case_id}, marcado como incompleto, e uma pessoa vai analisá-lo até {first_response_by}."
+  model_slow: "Estou demorando mais do que o normal, então vou responder com opções fixas. O que você quer fazer?"
+
+  # ---------------------------------------------------------------- buttons
+  btn.start_unrecognized: "Não reconheço uma cobrança"
+  btn.start_fee: "Cobraram uma tarifa indevida"
+  btn.start_case_status: "Como está meu caso?"
+  btn.start_lost_card: "Perdi meu cartão"
+  btn.human: "Falar com uma pessoa"
+  btn.confirm_charge: "É esta"
+  btn.none_of_these: "Nenhuma destas"
+  btn.recognize_yes: "Sim, reconheço"
+  btn.recognize_no: "Não reconheço"
+  btn.block_yes: "Sim, bloquear cartão •••• {last4}"
+  btn.block_no: "Não"
+  btn.restart: "Começar de novo"
+  btn.retry: "Tentar de novo"
+  btn.lang_es: "Español"
+  btn.lang_pt: "Português"
+
+  # ---------------------------------------------------------------- queues (lane C) and time zones
+  # Without article (like es.yaml): lane_c_handoff says "para a {queue}"; the case card shows the label alone.
+  queue.fraud: "equipe de Fraudes"
+  queue.disputes: "equipe de Reclamações de cobranças"
+  queue.fees: "equipe de Tarifas"
+  queue.cards: "equipe de Cartões"
+  queue.priority: "equipe de Atendimento prioritário"
+  queue.general: "equipe de Atendimento ao cliente"
+  tz.MX: "horário do centro do México"
+  tz.CO: "horário da Colômbia"
+  tz.AR: "horário da Argentina"
+  tz.UTC: "UTC"
+
+  # ---------------------------------------------------------------- orchestrator additions (2026-09-29)
+  confirm_duplicate: "Encontrei esta cobrança {n} vezes nos seus movimentos, com minutos de diferença: {charge}. É esta?"
+  ask_resolved: "Com isso ficou resolvido?"
+  lane_a_closed: "Pronto. Ficou registrado como resolvido na conversa ({case_id})."
+  case_status_short: "Seu caso {case_id} está na situação «{status}»."
+  btn.resolved_yes: "Sim, ficou resolvido"
+  btn.resolved_no: "Não, continua sem solução"
+  queue.regulator: "equipe de Assuntos regulatórios"
+  queue.complaints_es: "equipe de Reclamações em espanhol"
+  queue.complaints_pt: "equipe de Reclamações em português"
+  queue.senior: "equipe de Revisão sênior"
+  status.open: "aberto"
+  status.investigating: "em investigação"
+  status.awaiting_analyst: "em revisão"
+  status.notified: "notificado"
+  status.closed: "fechado"
+  status.reopened: "reaberto"
+  status.resolved_in_contact: "resolvido na conversa"
+  status.handed_off: "encaminhado para uma pessoa"
+
+  # ---------------------------------------------------------------- review fixes (2026-09-28)
+  confirm_charge_uncertain: "Encontrei esta cobrança parecida, embora não corresponda totalmente ao que você me disse: {charge}. É esta?"
+  confirm_charge_other_merchant: "Não encontrei uma cobrança nesse estabelecimento. A mais parecida nos seus movimentos é esta, em outro estabelecimento: {charge}. É esta?"
+  lane_b_case_open_other: "Abri o caso {case_id}. Uma pessoa da equipe vai analisá-lo e te dar uma primeira resposta até {first_response_by}. Data estimada de resolução: {expected_date}."
+  case_note_added: "Adicionei isso ao seu caso {case_id}, então a pessoa que o atender vai ver. Você não precisa repetir."
+  other_charge_after_case: "Isso parece outra reclamação, diferente do caso {case_id}, e não misturei com esse caso. Se quiser, eu te encaminho para uma pessoa para analisá-la."
+  side_request_noted: "Anotei no caso {case_id} que você quer falar com uma pessoa sobre essa outra solicitação; a pessoa que analisar o caso vai ver. Sua reclamação continua igual."
+  block_use_button: "Para bloquear o cartão, preciso que você confirme pelo botão; uma mensagem escrita não o bloqueia."
+  block_unavailable: "Sinto muito pelo seu cartão. Agora não consegui consultar seus cartões, então não o bloqueei: a pessoa que assumir o seu caso vai fazer isso com você."
+  lost_card_noted: "Anotei o que aconteceu com seu cartão no caso {case_id}; a pessoa que o atender vai ver."
+
+  # ---------------------------------------------------------------- console and switches (2026-09-29)
+  resolution_stamp: "Resposta aprovada por uma pessoa da equipe. Nesta demonstração nenhum dinheiro é movimentado."
+  request_information_default: "Para avançar com o seu caso {case_id} precisamos de mais uma informação. Responda por este chat e nós a adicionamos ao seu caso."
+  case_info_added: "Obrigado. Adicionei sua resposta ao caso {case_id} e uma pessoa da equipe vai analisá-la. Vamos te escrever por este canal."
+  case_reopened: "Entendido. Reabri o seu caso {case_id} para que uma pessoa da equipe revise a resposta de novo, com prioridade. Vamos te escrever por este canal."
+  case_awaiting_answer: "Estamos esperando sua resposta à pergunta da equipe: escreva aqui e eu adiciono ao caso."
+  switch.tools_down_on: "Modo juiz: ferramentas de dados fora do ar nesta sessão (simulado)."
+  switch.tools_down_off: "Modo juiz: ferramentas de dados restabelecidas nesta sessão."
+  switch.model_slow_on: "Modo juiz: modelo lento nesta sessão (simulado); os modelos de texto respondem."
+  switch.model_slow_off: "Modo juiz: modelo restabelecido nesta sessão."
+  switch.fast_clock_on: "Modo juiz: relógio acelerado para os casos desta sessão (simulado: 1 dia = {day}). As datas prometidas não mudam."
+  switch.fast_clock_on_neutral: "Modo juiz: relógio acelerado para os casos desta sessão (simulado). As datas prometidas não mudam."
+  switch.fast_clock_off: "Modo juiz: relógio real para os casos desta sessão."
+  # See es.yaml: proactive notices of the SLA timers; they repeat the promised date only.
+  sla_notice.sla_80: "Seguimos trabalhando no seu caso {case_id}. Ainda não temos uma resposta final; a data estimada continua sendo {expected_date} e vamos te escrever por este canal assim que houver novidades."
+  sla_notice.escalated: "O seu caso {case_id} está levando mais tempo do que o previsto, então o passamos para uma equipe sênior com prioridade alta. A data estimada continua sendo {expected_date}; vamos te escrever por este canal."
+  sla_notice.sla_80_date_passed: "Seguimos trabalhando no seu caso {case_id}. A data estimada que informamos já passou e ainda não temos uma resposta final; vamos te escrever por este canal assim que houver novidades."
+  sla_notice.escalated_date_passed: "O seu caso {case_id} está levando mais tempo do que o previsto, então o passamos para uma equipe sênior com prioridade alta. A data estimada que informamos já passou; vamos te escrever por este canal assim que houver novidades."
+
+  # ---------------------------------------------------------------- console backend (30 sep)
+  # See es.yaml: drafts of the PROVISIONAL deterministic investigator; never a promise of money.
+  resolution_intro: "Novidades do seu caso {case_id}:"
+  investigator.no_date: "a data estimada do caso"
+  investigator.draft.duplicate_not_reversed: "Revisamos o seu caso {case_id}: há duas cobranças iguais de {amount} em {merchant} em {date}, com minutos de diferença, e nenhuma tem estorno registrado. O passo proposto é abrir uma disputa com o estabelecimento pela cobrança repetida. Avisaremos o resultado até {expected_date}."
+  investigator.draft.fee_off_schedule: "Revisamos o seu caso {case_id}: a tarifa «{fee_name}» de {date} foi cobrada por {amount} e a tarifa vigente do seu produto é {fee_amount}. O passo proposto é corrigir a tarifa conforme a tabela vigente. Avisaremos o resultado até {expected_date}."
+  investigator.draft.purchase_amount_disputed: "Revisamos o seu caso {case_id}: a cobrança de {merchant} em {date} está registrada por {amount}. Para seguir, precisamos do comprovante da compra ou do valor que você esperava pagar; você pode enviar respondendo por este canal."
+  investigator.draft.unrecognized_new_merchant: "Revisamos o seu caso {case_id}: a cobrança de {amount} em {merchant} em {date} é a primeira nesse estabelecimento nos últimos 90 dias. O passo proposto é abrir uma disputa com o estabelecimento por essa cobrança. Avisaremos o resultado até {expected_date}."
+  investigator.draft.unrecognized_known_merchant: "Revisamos o seu caso {case_id}: a cobrança de {amount} em {merchant} em {date} é parecida com compras anteriores suas nesse estabelecimento. Para seguir, precisamos saber se outra pessoa usa o seu cartão ou se você tem o comprovante; você pode responder por este canal."
+  investigator.draft.explained: "Revisamos o seu caso {case_id} sobre a cobrança de {amount} em {merchant} em {date}, e o registro explica a cobrança. Se algo não fizer sentido, responda por este canal e uma pessoa revisa de novo."
+  investigator.draft.generic: "Revisamos o seu caso {case_id}. Uma pessoa da equipe continua a revisão e avisaremos o resultado até {expected_date}."

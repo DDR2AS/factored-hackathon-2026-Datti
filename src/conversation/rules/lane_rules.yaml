@@ -1,0 +1,117 @@
+# Lane rules (owner: arturo). Rules decide the lane; no model output chooses it (D2).
+# Evaluated top to bottom, first match wins. Every condition in `when` must hold (AND).
+# A field that is unknown (null) never satisfies a condition.
+# Operators: a plain value means equals; {gt|gte|lt|lte: n}; {in: [..]}.
+# lane: null means "not decidable yet": the orchestrator asks for the missing detail.
+# Sources: plan v2 section 4 (three lanes) and section 3 (scope).
+
+version: "2026-09-29.2"
+
+rules:
+  # --- C: human now. Checked first so they fire even while evidence is incomplete.
+  - id: identity_not_verified
+    lane: C
+    when: {identity_verified: false}
+    reason: Identity not verified; no customer data can be shown.
+  - id: tool_failure
+    lane: C
+    when: {tool_failure: true}
+    reason: Data tool unavailable after bounded retries; case opens marked incomplete.
+  - id: lost_card
+    lane: C
+    when: {intent_class: lost_card}
+    reason: Lost or stolen card; offer block with confirmation and route to the card queue.
+  - id: asks_for_human
+    lane: C
+    when: {asks_for_human: true}
+    reason: Customer asked for a person.
+  - id: regulator_or_legal
+    lane: C
+    when: {mentions_regulator: true}
+    reason: Regulator or legal threat mentioned.
+  - id: repeat_complainer
+    lane: C
+    when: {prior_complaints: {gte: 2}}
+    reason: Repeat complainer (two or more prior complaints in contact history).
+  - id: compensation_requested
+    lane: C
+    when: {asks_compensation: true}
+    reason: Customer asks for compensation; the system never promises it.
+  - id: high_amount
+    lane: C
+    when: {amount_usd: {gt: 500}}
+    reason: Disputed amount above 500 USD.
+  - id: high_fraud_score
+    lane: C
+    when: {fraud_score: {gt: 30}}
+    reason: fraud_score above 30 (fraud in 100% of past cases); fraud queue.
+  - id: complaint_about_person
+    lane: C
+    when: {complaint_about_person: true}
+    reason: Complaint about a staff member.
+  - id: no_progress
+    lane: C
+    when: {turns_without_progress: {gte: 3}}
+    reason: Three turns without progress.
+
+  # --- Not decidable yet: keep asking for what the completeness rules require.
+  - id: missing_evidence
+    lane: null
+    when: {evidence_complete: false}
+    reason: Required details for this complaint type are still missing.
+
+  # --- Lane A was explained with the record but the customer says it is not resolved.
+  - id: explanation_not_accepted
+    lane: B
+    when: {customer_accepts_explanation: false}
+    reason: Customer did not accept the lane A explanation; case with promised date and investigator.
+
+  # --- Duplicates first: a duplicate matters even when each fee matches the schedule.
+  - id: duplicate_already_reversed
+    lane: A
+    when: {charge_confirmed: true, duplicate_found: true, duplicate_reversed: true}
+    reason: Duplicate charge found and already reversed; explain with the record.
+  - id: duplicate_not_reversed
+    lane: B
+    when: {charge_confirmed: true, duplicate_found: true, duplicate_reversed: false}
+    reason: Duplicate charge not reversed; case with promised date and investigator.
+
+  # --- A: the data explains it.
+  - id: already_reversed
+    lane: A
+    when: {charge_confirmed: true, already_reversed: true}
+    reason: Charge already reversed; explain with the record.
+  - id: customer_recognizes
+    lane: A
+    when: {charge_confirmed: true, customer_recognizes: true}
+    reason: Customer recognized the charge once shown the exact record.
+  - id: fee_matches_schedule
+    lane: A
+    when: {complaint_type: wrong_fee, charge_confirmed: true, fee_matches_schedule: true}
+    reason: Fee matches the published schedule; explain the rule.
+
+  # --- B: evidence complete, needs work.
+  - id: fee_does_not_match
+    lane: B
+    when: {complaint_type: wrong_fee, charge_confirmed: true, fee_matches_schedule: false}
+    reason: Fee does not match the schedule; case with promised date and investigator.
+  # "Me cobraron de más" about an ordinary purchase: there is no schedule to compare with, so
+  # the fee_* rules cannot fire. Before this rule it fell to no_rule_matched (C).
+  - id: purchase_amount_disputed
+    lane: B
+    when: {complaint_type: wrong_fee, charge_confirmed: true, charge_is_fee: false}
+    reason: Customer disputes the amount of a confirmed purchase (not a fee); case with promised date and investigator.
+  - id: unrecognized_low_risk
+    lane: B
+    when: {complaint_type: unrecognized_charge, charge_confirmed: true}
+    reason: Unrecognized charge with low risk; case with promised date and investigator.
+  - id: other_complaint_complete
+    lane: B
+    when: {complaint_type: {in: [app, branch, service]}, evidence_complete: true}
+    reason: Non-money complaint with complete details; case routed to its queue (no investigator).
+
+# Nothing matched: the safe default is a person, never an automatic answer.
+default:
+  id: no_rule_matched
+  lane: C
+  reason: No rule matched the evidence; safe fallback to a person.

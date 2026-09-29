@@ -1,0 +1,55 @@
+# SINTÉTICO. Fixtures de G1 (mock) para Andrés, el cliente demo (es-CO; no es el compañero Andrés).
+# Formato y reglas: ver lucia.yaml.
+synthetic: true
+prompt_id: g1_extract
+customer: andres
+language: es
+reference_date: 2026-06-15
+cases:
+  - id: andres-s1
+    kind: suggestion
+    text: "Me cobraron dos veces lo mismo, con minutos de diferencia"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: andres-v1
+    kind: variant
+    text: "me cobraron ciento ochenta y nueve mil novecientos dos veces en Tienda Tecno"
+    beats_regex: [amount]
+    output:
+      slots: {amount: "189900", currency: null, date: null, date_is_relative: null, merchant_text: "Tienda Tecno", card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: andres-v2
+    kind: variant
+    text: "Tengo doble cargo de Tienda Tecno del fin de semana, uno debería estar reversado"
+    beats_regex: [merchant_text, complaint_type]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: "Tienda Tecno", card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: andres-v3
+    kind: variant
+    text: "Me duplicaron la compra de TIENDA TECNO en mi tarjeta Oro terminada en cinco cinco uno dos"
+    beats_regex: [merchant_text, card_last4]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: "TIENDA TECNO", card_last4: "5512"}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: andres-v4
+    kind: variant
+    text: "Hoy vi dos cobros iguales de ciento ochenta y nueve mil novecientos; la compra la hice el domingo"
+    beats_regex: [date]
+    output:
+      slots: {amount: "189900", currency: null, date: "2026-06-14", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: andres-v5
+    kind: variant
+    text: "Revisando el extracto veo la compra de la tienda de tecnología repetida; fue por ciento ochenta y nueve mil novecientos pesos colombianos"
+    beats_regex: [currency, merchant_text]
+    output:
+      slots: {amount: "189900", currency: COP, date: null, date_is_relative: null, merchant_text: "tienda de tecnología", card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee

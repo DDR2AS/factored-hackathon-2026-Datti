@@ -1,0 +1,248 @@
+# DEMO CUSTOMERS. EVERYTHING IN THIS FILE IS SYNTHETIC.
+# Invented people (first name only), products, cards, transactions, fees and contacts for the
+# judge-mode demo. No document numbers, addresses or phone numbers, ever. Not derived from
+# any real customer. Read by src/conversation/demo_gateway.py (owner: arturo; proposal to
+# Andrés as the `demo` backend of INTERFACES.md #2).
+#
+# Data is frozen at 2026-06-17 (dataset cut-off). Relative dates said by a customer ("el 12")
+# resolve against the customer's reference date = their latest transaction on or before
+# data_cutoff (computed by the gateway).
+#
+# Each customer has explicit `transactions` (the scenario) plus a `background` block that the
+# gateway expands into ordinary purchases with random.Random(seed): same file, same output.
+# Background purchases never land within +-15% of a scenario amount within 3 days of it, so
+# they cannot change which charge the demo is about.
+#
+# joao: country AR and currency ARS are an ASSUMPTION by Arturo (Diego reviews it).
+# Portuguese names and texts are generated, without native review.
+
+version: "2026-09-29.1"  # 29 sep: Martina 245000 -> 145000 ARS (high_fraud_score)
+synthetic: true
+data_cutoff: 2026-06-17
+
+customers:
+  lucia:
+    customer_id: DEMO-C-0001
+    display_name: Lucía
+    language: es
+    locale: es-MX
+    country: MX
+    currency: MXN
+    segment: Masivo
+    demonstrates: Unrecognized charge found with high confidence; B if not recognized, A if recognized.
+    products:
+      - {product_id: DEMO-P-LUC-CC, kind: credit_card, name: Tarjeta de crédito Clásica, currency: MXN, last4: "4821"}
+    cards:
+      - {card_id: DEMO-K-LUC-01, product_id: DEMO-P-LUC-CC, card_last4: "4821", status: active}
+    fees:
+      DEMO-P-LUC-CC:
+        - {fee_code: ANNUAL, merchant_id: FEE-ANNUAL, description: Anualidad tarjeta Clásica, amount: "650.00", frequency: yearly}
+    prior_contacts: []
+    transactions:
+      - {txn_id: TX-LUC-0001, date: 2026-06-12, time: "18:42", merchant_name: SUPER AHORRO SA, merchant_id: M-SUPERAHORRO, category: groceries, amount: "449.90", fraud_score: 4}
+      - {txn_id: TX-LUC-0002, date: 2026-06-10, time: "13:15", merchant_name: SUPERCITO EXPRESS, merchant_id: M-SUPERCITO, category: groceries, amount: "452.00", fraud_score: 3}
+      - {txn_id: TX-LUC-0003, date: 2026-06-05, time: "19:03", merchant_name: SUPER AHORRO SA, merchant_id: M-SUPERAHORRO, category: groceries, amount: "450.00", fraud_score: 2}
+      - {txn_id: TX-LUC-0004, date: 2026-06-12, time: "08:20", merchant_name: OXXO 1123, merchant_id: M-OXXO1123, category: convenience, amount: "45.00", fraud_score: 1}
+    background:
+      seed: 1001
+      count: 22
+      date_from: 2026-05-01
+      date_to: 2026-06-17
+      amount_min: "60"
+      amount_max: "900"
+      merchants:
+        - [TAQUERIA EL PASTOR, M-MX-TAQ01, restaurants]
+        - [FARMACIA VIDA SANA, M-MX-FAR01, pharmacy]
+        - [GASOLINERA DEL VALLE, M-MX-GAS01, fuel]
+        - [CINEMAS LUNA, M-MX-CIN01, entertainment]
+        - [PAPELERIA EL LAPIZ, M-MX-PAP01, retail]
+        - [RESTAURANTE LA HACIENDA, M-MX-RES01, restaurants]
+        - [TRANSPORTE URBANO MX, M-MX-TRA01, transport]
+        - [FERRETERIA EL TORNILLO, M-MX-FER01, home]
+
+  joao:
+    customer_id: DEMO-C-0002
+    display_name: João
+    language: pt
+    locale: pt-BR
+    country: AR
+    currency: ARS
+    segment: Masivo
+    demonstrates: Portuguese end to end; maintenance fee above the schedule gives B (fee_does_not_match).
+    products:
+      - {product_id: DEMO-P-JOA-CA, kind: savings_account, name: Caja de ahorro Sueldo, currency: ARS, last4: "3307"}
+    cards:
+      - {card_id: DEMO-K-JOA-01, product_id: DEMO-P-JOA-CA, card_last4: "3307", status: active}
+    fees:
+      DEMO-P-JOA-CA:
+        - {fee_code: MAINT, merchant_id: FEE-MAINT, description: Comisión mantenimiento cuenta, amount: "8900.00", frequency: monthly}
+    prior_contacts: []
+    transactions:
+      - {txn_id: TX-JOA-0001, date: 2026-06-01, time: "03:00", merchant_name: COMISION MANTENIMIENTO CUENTA, merchant_id: FEE-MAINT, category: bank_fee, amount: "12500.00", txn_type: fee, fraud_score: 0}
+      - {txn_id: TX-JOA-0002, date: 2026-05-01, time: "03:00", merchant_name: COMISION MANTENIMIENTO CUENTA, merchant_id: FEE-MAINT, category: bank_fee, amount: "8900.00", txn_type: fee, fraud_score: 0}
+      - {txn_id: TX-JOA-0003, date: 2026-04-01, time: "03:00", merchant_name: COMISION MANTENIMIENTO CUENTA, merchant_id: FEE-MAINT, category: bank_fee, amount: "8900.00", txn_type: fee, fraud_score: 0}
+    background:
+      seed: 1002
+      count: 22
+      date_from: 2026-04-15
+      date_to: 2026-06-16
+      amount_min: "2000"
+      amount_max: "80000"
+      merchants:
+        - [PANADERIA LA MEDIALUNA, M-AR-PAN01, groceries]
+        - [KIOSCO EL PUERTO, M-AR-KIO01, convenience]
+        - [FARMACIA DEL SOL, M-AR-FAR01, pharmacy]
+        - [ESTACION DE SERVICIO RUTA 3, M-AR-EST01, fuel]
+        - [PARRILLA DON JUAN, M-AR-PAR01, restaurants]
+        - [SUPERMERCADO EL TREBOL, M-AR-SUP01, groceries]
+        - [LIBRERIA LOS ANDES, M-AR-LIB01, retail]
+
+  andres:
+    customer_id: DEMO-C-0003
+    display_name: Andrés
+    language: es
+    locale: es-CO
+    country: CO
+    currency: COP
+    segment: Masivo
+    demonstrates: "Andrés (cliente demo): the same charge twice, not reversed, gives B (duplicate_not_reversed)."
+    products:
+      - {product_id: DEMO-P-AND-CC, kind: credit_card, name: Tarjeta de crédito Oro, currency: COP, last4: "5512"}
+    cards:
+      - {card_id: DEMO-K-AND-01, product_id: DEMO-P-AND-CC, card_last4: "5512", status: active}
+    fees:
+      DEMO-P-AND-CC:
+        - {fee_code: HANDLING, merchant_id: FEE-HANDLING, description: Cuota de manejo mensual, amount: "38900.00", frequency: monthly}
+    prior_contacts: []
+    transactions:
+      - {txn_id: TX-AND-0001, date: 2026-06-14, time: "10:02", merchant_name: TIENDA TECNO SAS, merchant_id: M-TECNO, category: electronics, amount: "189900.00", fraud_score: 3}
+      - {txn_id: TX-AND-0002, date: 2026-06-14, time: "10:05", merchant_name: TIENDA TECNO SAS, merchant_id: M-TECNO, category: electronics, amount: "189900.00", fraud_score: 3}
+      - {txn_id: TX-AND-0003, date: 2026-06-05, time: "02:00", merchant_name: CUOTA DE MANEJO, merchant_id: FEE-HANDLING, category: bank_fee, amount: "38900.00", txn_type: fee, fraud_score: 0}
+    background:
+      seed: 1003
+      count: 22
+      date_from: 2026-05-01
+      date_to: 2026-06-17
+      amount_min: "8000"
+      amount_max: "250000"
+      merchants:
+        - [PANADERIA EL TRIGAL, M-CO-PAN01, groceries]
+        - [DROGUERIA BIENESTAR, M-CO-DRO01, pharmacy]
+        - [ESTACION DE SERVICIO LA 80, M-CO-EST01, fuel]
+        - [RESTAURANTE SABOR PAISA, M-CO-RES01, restaurants]
+        - [RECARGA TRANSPORTE CO, M-CO-TRA01, transport]
+        - [LIBRERIA LETRAS, M-CO-LIB01, retail]
+        - [CAFE DEL PARQUE, M-CO-CAF01, restaurants]
+
+  sofia:
+    customer_id: DEMO-C-0004
+    display_name: Sofía
+    language: es
+    locale: es-CO
+    country: CO
+    currency: COP
+    segment: Joven
+    demonstrates: Three nearly identical charges (choose band); then asks for a loan (out of scope).
+    products:
+      - {product_id: DEMO-P-SOF-DB, kind: debit_card, name: Tarjeta débito Joven, currency: COP, last4: "2290"}
+    cards:
+      - {card_id: DEMO-K-SOF-01, product_id: DEMO-P-SOF-DB, card_last4: "2290", status: active}
+    fees:
+      DEMO-P-SOF-DB:
+        - {fee_code: HANDLING, merchant_id: FEE-HANDLING, description: Cuota de manejo mensual, amount: "0.00", frequency: monthly}
+    prior_contacts: []
+    transactions:
+      - {txn_id: TX-SOF-0001, date: 2026-06-08, time: "20:11", merchant_name: RAPPI COLOMBIA, merchant_id: M-RAPPI, category: food_delivery, amount: "52000.00", fraud_score: 5}
+      - {txn_id: TX-SOF-0002, date: 2026-06-09, time: "21:34", merchant_name: RAPPI*RESTAURANTE, merchant_id: M-RAPPIREST, category: food_delivery, amount: "51500.00", fraud_score: 5}
+      - {txn_id: TX-SOF-0003, date: 2026-06-09, time: "13:02", merchant_name: DIDI FOOD, merchant_id: M-DIDIFOOD, category: food_delivery, amount: "52000.00", fraud_score: 4}
+      # An already reversed charge, so get_reversals has something to return (lane A path).
+      - {txn_id: TX-SOF-0004, date: 2026-05-18, time: "09:40", merchant_name: MUSICA STREAM CO, merchant_id: M-MUSICA, category: subscriptions, amount: "16900.00", fraud_score: 2}
+      - {txn_id: TX-SOF-0005, date: 2026-05-20, time: "11:00", merchant_name: MUSICA STREAM CO, merchant_id: M-MUSICA, category: subscriptions, amount: "-16900.00", txn_type: reversal, reversal_of: TX-SOF-0004, status: reversed, fraud_score: 0}
+    background:
+      seed: 1004
+      count: 20
+      date_from: 2026-05-01
+      date_to: 2026-06-17
+      amount_min: "8000"
+      amount_max: "180000"
+      merchants:
+        - [PANADERIA EL TRIGAL, M-CO-PAN01, groceries]
+        - [RECARGA TRANSPORTE CO, M-CO-TRA01, transport]
+        - [LIBRERIA LETRAS, M-CO-LIB01, retail]
+        - [CAFE DEL PARQUE, M-CO-CAF01, restaurants]
+        - [GIMNASIO FUERZA, M-CO-GIM01, sports]
+        - [TIENDA DE ROPA ALEGRIA, M-CO-ROP01, apparel]
+
+  martina:
+    customer_id: DEMO-C-0005
+    display_name: Martina
+    language: es
+    locale: es-AR
+    country: AR
+    currency: ARS
+    segment: Masivo
+    demonstrates: fraud_score 82 on an online purchase sends the case to a person (fraud queue); card block only with an explicit yes.
+    products:
+      - {product_id: DEMO-P-MAR-CC, kind: credit_card, name: Tarjeta de crédito Clásica, currency: ARS, last4: "7730"}
+    cards:
+      - {card_id: DEMO-K-MAR-01, product_id: DEMO-P-MAR-CC, card_last4: "7730", status: active}
+    fees:
+      DEMO-P-MAR-CC:
+        - {fee_code: ANNUAL, merchant_id: FEE-ANNUAL, description: Anualidad tarjeta Clásica, amount: "45000.00", frequency: yearly}
+    prior_contacts: []
+    transactions:
+      # 145000 ARS = 414.29 USD at the synthetic rate: below the 500 USD rule, so the lane rule that
+      # fires is high_fraud_score (fraud_score 82 > 30), as plan v2 section 12 promises.
+      - {txn_id: TX-MAR-0001, date: 2026-06-15, time: "03:17", merchant_name: ELECTRO MUNDO ONLINE, merchant_id: M-ELECTROMUNDO, category: electronics, amount: "145000.00", fraud_score: 82}
+    background:
+      seed: 1005
+      count: 24
+      date_from: 2026-05-01
+      date_to: 2026-06-17
+      amount_min: "2000"
+      amount_max: "60000"
+      merchants:
+        - [PANADERIA LA MEDIALUNA, M-AR-PAN01, groceries]
+        - [KIOSCO EL PUERTO, M-AR-KIO01, convenience]
+        - [FARMACIA DEL SOL, M-AR-FAR01, pharmacy]
+        - [ESTACION DE SERVICIO RUTA 3, M-AR-EST01, fuel]
+        - [PARRILLA DON JUAN, M-AR-PAR01, restaurants]
+        - [RECARGA TRANSPORTE AR, M-AR-TRA01, transport]
+
+  carlos:
+    customer_id: DEMO-C-0006
+    display_name: Carlos
+    language: es
+    locale: es-MX
+    country: MX
+    currency: MXN
+    segment: Preferente
+    demonstrates: Mentions the regulator and has three prior complaints; goes to a person with high priority.
+    products:
+      - {product_id: DEMO-P-CAR-CC, kind: credit_card, name: Tarjeta de crédito Platino, currency: MXN, last4: "6154"}
+    cards:
+      - {card_id: DEMO-K-CAR-01, product_id: DEMO-P-CAR-CC, card_last4: "6154", status: active}
+    fees:
+      DEMO-P-CAR-CC:
+        - {fee_code: ANNUAL, merchant_id: FEE-ANNUAL, description: Anualidad tarjeta Platino, amount: "2400.00", frequency: yearly}
+    prior_contacts:
+      - {contact_id: DEMO-CT-CAR-01, date: 2026-03-02, channel: phone, contact_type: complaint, subcategory: unrecognized_charge, status: closed}
+      - {contact_id: DEMO-CT-CAR-02, date: 2026-04-18, channel: app, contact_type: complaint, subcategory: wrong_fee, status: closed}
+      - {contact_id: DEMO-CT-CAR-03, date: 2026-05-25, channel: phone, contact_type: complaint, subcategory: service, status: in_progress}
+    transactions:
+      - {txn_id: TX-CAR-0001, date: 2026-06-11, time: "00:05", merchant_name: STREAMING PLUS, merchant_id: M-STREAMPLUS, category: subscriptions, amount: "1299.00", fraud_score: 6}
+      - {txn_id: TX-CAR-0002, date: 2026-05-11, time: "00:05", merchant_name: STREAMING PLUS, merchant_id: M-STREAMPLUS, category: subscriptions, amount: "1299.00", fraud_score: 6}
+    background:
+      seed: 1006
+      count: 22
+      date_from: 2026-05-01
+      date_to: 2026-06-17
+      amount_min: "80"
+      amount_max: "3500"
+      merchants:
+        - [RESTAURANTE LA HACIENDA, M-MX-RES01, restaurants]
+        - [GASOLINERA DEL VALLE, M-MX-GAS01, fuel]
+        - [FARMACIA VIDA SANA, M-MX-FAR01, pharmacy]
+        - [CINEMAS LUNA, M-MX-CIN01, entertainment]
+        - [LIBRERIA EL CANTO, M-MX-LIB01, retail]
+        - [AEROLINEA DEMO VUELOS, M-MX-AER01, travel]

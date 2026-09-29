@@ -1,0 +1,62 @@
+# SINTÉTICO. Fixtures de G1 (mock) para Carlos (cliente demo, es-MX).
+# Formato y reglas: ver lucia.yaml.
+synthetic: true
+prompt_id: g1_extract
+customer: carlos
+language: es
+reference_date: 2026-06-12
+cases:
+  - id: carlos-s1
+    kind: suggestion
+    text: "Es la tercera vez que me quejo; si no lo arreglan voy al regulador"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {mentions_regulator: true}
+      complaint_type: null
+  - id: carlos-s2
+    kind: suggestion
+    text: "Me cobraron 1.299 de STREAMING PLUS el 11 y no lo reconozco"
+    output:
+      slots: {amount: "1299", currency: null, date: "2026-06-11", date_is_relative: true, merchant_text: "STREAMING PLUS", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: carlos-v1
+    kind: variant
+    text: "Ya me cansé, voy a poner una queja ante la Condusef por el cobro de Streaming Plus de ayer"
+    beats_regex: [merchant_text]
+    output:
+      slots: {amount: null, currency: null, date: "2026-06-11", date_is_relative: true, merchant_text: "Streaming Plus", card_last4: null}
+      flags: {mentions_regulator: true}
+      complaint_type: null
+  - id: carlos-v2
+    kind: variant
+    text: "Anoche me cargaron mil doscientos noventa y nueve de una suscripción que cancelé"
+    beats_regex: [amount, date]
+    output:
+      slots: {amount: "1299", currency: null, date: "2026-06-11", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: null
+  - id: carlos-v3
+    kind: variant
+    text: "Si no me devuelven lo de Streaming Plus los voy a demandar"
+    beats_regex: [merchant_text]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: "Streaming Plus", card_last4: null}
+      flags: {mentions_regulator: true}
+      complaint_type: null
+  - id: carlos-v4
+    kind: variant
+    text: "Exijo que me reembolsen y además me den algo por el tiempo perdido"
+    beats_regex: [asks_compensation]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {asks_compensation: true}
+      complaint_type: null
+  - id: carlos-v5
+    kind: variant
+    text: "El jueves me volvieron a cobrar el streaming, $1,299, y el asesor que me atendió por teléfono fue muy déspota"
+    beats_regex: [complaint_about_person, merchant_text]
+    output:
+      slots: {amount: "1299", currency: null, date: "2026-06-11", date_is_relative: true, merchant_text: "streaming", card_last4: null}
+      flags: {complaint_about_person: true}
+      complaint_type: null

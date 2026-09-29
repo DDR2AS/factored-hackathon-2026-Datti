@@ -1,0 +1,66 @@
+# SINTÉTICO. Fixtures de G1 (proveedor mock, conversation/llm_port.MockLLMClient) para Lucía
+# (cliente demo, es-MX). Clave = texto REDACTADO y normalizado + reference_date (último día con
+# datos del cliente). kind "suggestion": mensaje sugerido del modo juez
+# (frontend/src/demo/customers.ts); "variant": variante realista donde el modelo supera a la
+# regex (beats_regex dice en qué campos). Las salidas son lo que un buen extractor devolvería;
+# no vienen de un modelo real. Distintas de los mensajes de prueba escritos por el equipo.
+synthetic: true
+prompt_id: g1_extract
+customer: lucia
+language: es
+reference_date: 2026-06-15
+cases:
+  - id: lucia-s1
+    kind: suggestion
+    text: "Hola, me salió un cobro como de 450 en el súper el 12 y no lo ubico"
+    output:
+      slots: {amount: "450", currency: null, date: "2026-06-12", date_is_relative: true, merchant_text: "súper", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-s2
+    kind: suggestion
+    text: "Tengo un cargo en mi tarjeta que no reconozco"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-v1
+    kind: variant
+    text: "Me apareció un cargo raro, cuatrocientos cincuenta más o menos, del súper de la esquina"
+    beats_regex: [amount, merchant_text, complaint_type]
+    output:
+      slots: {amount: "450", currency: null, date: null, date_is_relative: null, merchant_text: "súper de la esquina", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-v2
+    kind: variant
+    text: "el viernes pasado pasé al super ahorro y me cobraron casi 450 pesos que no reconozco"
+    beats_regex: [merchant_text]
+    output:
+      slots: {amount: "450", currency: null, date: "2026-06-12", date_is_relative: true, merchant_text: "super ahorro", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-v3
+    kind: variant
+    text: "No reconozco un consumo del fin de semana: 449 con 90 en Súper Ahorro"
+    beats_regex: [amount]
+    output:
+      slots: {amount: "449.90", currency: null, date: null, date_is_relative: null, merchant_text: "Súper Ahorro", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-v4
+    kind: variant
+    text: "me cobraron 450 en el súper, pero la tarjeta que termina en cuatro ocho dos uno la tengo yo"
+    beats_regex: [card_last4]
+    output:
+      slots: {amount: "450", currency: null, date: null, date_is_relative: null, merchant_text: "súper", card_last4: "4821"}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: lucia-v5
+    kind: variant
+    text: "Me hicieron un cargo en la tarjeta ayer como de cuatrocientos cincuenta, pero la compra que no reconozco fue el viernes en el Súper Ahorro"
+    beats_regex: [date]
+    output:
+      slots: {amount: "450", currency: null, date: "2026-06-12", date_is_relative: true, merchant_text: "Súper Ahorro", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge

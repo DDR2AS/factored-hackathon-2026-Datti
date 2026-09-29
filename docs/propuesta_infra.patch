@@ -1,0 +1,229 @@
+PROPUESTA (NO APLICADA) de cambios minimos a infra/ del repo del equipo, para que Andres la revise
+antes del despliegue del 29 sep 2026 por la noche. Nadie la aplico en ningun repo.
+
+Base: repo del equipo en f753eb8 (clon local de Arturo, sin fetch). Si main avanzo, revisar antes.
+Detalle, pruebas y razones: docs/verificacion_cdk.md (en esta misma rama).
+
+Que cambia:
+  cdk.json, stacks/config.py  contexto nuevo: apiStore (memory), apiLlmProvider (none),
+                              apiReservedConcurrency (1; 0 = sin reserva)
+  stacks/api_stack.py         ApiFn: STORE_BACKEND, LLM_PROVIDER (pisa el bedrock de
+                              model_environment), LIFECYCLE_BACKEND, LOCAL_INVESTIGATION_DELAY_SECONDS,
+                              SESSION_RATE_PER_MINUTE, TRACE_DIR=/tmp/traces; concurrencia reservada
+  stacks/common.py            -c bundle=true sin Docker: pip con wheels manylinux2014_x86_64 / cp312
+                              (si pip falla, CDK vuelve a la imagen Docker como hoy)
+  stacks/web_stack.py         cache policy propia en /api/* que incluye Authorization (TTL 0/0/1 s)
+  tests/test_stacks.py        dos guardas nuevas (variables del ApiFn, Authorization en /api/*)
+
+Probado en una copia (scratchpad), sin credenciales de AWS: git apply --check OK sobre f753eb8 con
+finales LF y CRLF; python -m pytest -q tests -> 12 passed; cdk synth -c stage=dev-arturo OK;
+cdk synth -c stage=ci OK; cdk synth -c bundle=true OK por el bundling local (sin Docker).
+No probado: nada de esto se desplego; la cache policy y la concurrencia reservada solo se validan
+en AWS (ver riesgos en docs/verificacion_cdk.md).
+
+Aplicar (desde la raiz del repo del equipo):  git apply --check propuesta_infra.patch && git apply propuesta_infra.patch
+
+diff -ruN a/infra/cdk.json b/infra/cdk.json
+--- a/infra/cdk.json
++++ b/infra/cdk.json
+@@ -15,6 +15,9 @@
+     },
+     "allowedOrigins": ["*"],
+     "bundle": false,
++    "apiStore": "memory",
++    "apiLlmProvider": "none",
++    "apiReservedConcurrency": 1,
+     "warmup": false,
+     "withAccess": false,
+     "deployers": [],
+diff -ruN a/infra/stacks/api_stack.py b/infra/stacks/api_stack.py
+--- a/infra/stacks/api_stack.py
++++ b/infra/stacks/api_stack.py
+@@ -65,8 +65,23 @@
+                 **model_environment(cfg),
+                 "SESSION_TTL_MINUTES": "15",
+                 "LLM_TIMEOUT_SECONDS": "8",
++                # Read by src/conversation (INTERFACES.md #9). Without STORE_BACKEND every route
++                # but /health answers 500 when STAGE is not local.
++                "STORE_BACKEND": cfg.api_store,
++                # none = rule-based extractor only, until src/llm exists (bedrock without it
++                # marks every turn degraded model_timeout). -c apiLlmProvider=bedrock later.
++                "LLM_PROVIDER": cfg.api_llm_provider,
++                "LIFECYCLE_BACKEND": "local",
++                "LOCAL_INVESTIGATION_DELAY_SECONDS": "4",
++                "SESSION_RATE_PER_MINUTE": "60",
++                # /var/task is read-only; without this the traces are dropped silently.
++                "TRACE_DIR": "/tmp/traces",
+             },
+         )
++        if cfg.api_reserved_concurrency:
++            # Memory store: one container keeps every session and case (M1 bridge).
++            fn_resource = self.function.node.default_child
++            fn_resource.reserved_concurrent_executions = cfg.api_reserved_concurrency
+         data.sessions.grant_read_write_data(self.function)
+         data.cases.grant_read_write_data(self.function)
+         data.demo.grant_read_write_data(self.function)
+diff -ruN a/infra/stacks/common.py b/infra/stacks/common.py
+--- a/infra/stacks/common.py
++++ b/infra/stacks/common.py
+@@ -2,9 +2,13 @@
+ 
+ from __future__ import annotations
+ 
++import shutil
++import subprocess
++import sys
+ from pathlib import Path
+ 
+ import aws_cdk as cdk
++import jsii
+ from aws_cdk import aws_iam as iam
+ from aws_cdk import aws_lambda as _lambda
+ from aws_cdk import aws_logs as logs
+@@ -18,11 +22,36 @@
+ LAMBDA_EXCLUDES = ["**/__pycache__", "**/*.pyc", "**/*.ipynb", "etl"]
+ 
+ 
++@jsii.implements(cdk.ILocalBundling)
++class _PipLocalBundling:
++    """Bundle without Docker: pip downloads the Linux x86_64 / CPython 3.12 wheels of
++    src/requirements-lambda.txt (binary wheels only, so nothing is compiled on this machine)
++    and src/ is copied next to them. If pip fails, CDK falls back to the Docker image."""
++
++    def try_bundle(self, output_dir: str, options=None) -> bool:  # jsii passes both positionally
++        command = [
++            sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir",
++            "--platform", "manylinux2014_x86_64", "--implementation", "cp",
++            "--python-version", "3.12", "--only-binary=:all:",
++            "--target", output_dir, "-r", str(SRC_DIR / "requirements-lambda.txt"),
++        ]
++        result = subprocess.run(command, check=False, capture_output=True, text=True)
++        if result.returncode != 0:
++            print(result.stdout + result.stderr, file=sys.stderr)
++            return False
++        shutil.copytree(
++            SRC_DIR, output_dir, dirs_exist_ok=True,
++            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.ipynb", "etl"),
++        )
++        return True
++
++
+ def lambda_code(cfg: StageConfig) -> _lambda.Code:
+     """Package src/ as the Lambda asset.
+ 
+     With ``-c bundle=true`` the dependencies in ``src/requirements-lambda.txt`` are
+-    installed inside the official Lambda build image (needs Docker). Without it the
++    installed with pip for Linux x86_64 / Python 3.12 on this machine (no Docker needed);
++    if that fails, inside the official Lambda build image (needs Docker). Without it the
+     asset is the plain source, which is enough for ``cdk synth`` and for handlers
+     that only use the standard library and boto3.
+     """
+@@ -32,6 +61,7 @@
+         str(SRC_DIR),
+         exclude=LAMBDA_EXCLUDES,
+         bundling=cdk.BundlingOptions(
++            local=_PipLocalBundling(),
+             image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+             command=[
+                 "bash",
+diff -ruN a/infra/stacks/config.py b/infra/stacks/config.py
+--- a/infra/stacks/config.py
++++ b/infra/stacks/config.py
+@@ -33,6 +33,11 @@
+     budget_limits_usd: tuple[int, ...]
+     deployers: tuple[str, ...]
+     allowed_origins: tuple[str, ...]
++    # API Lambda (INTERFACES.md #9). memory is the M1 bridge: sessions and cases live in one
++    # container and are lost on cold start or redeploy, so it goes with reserved concurrency 1.
++    api_store: str = "memory"
++    api_llm_provider: str = "none"
++    api_reserved_concurrency: int | None = 1
+ 
+     @property
+     def is_prod(self) -> bool:
+@@ -101,6 +106,14 @@
+     if create_budget and not alert_email:
+         raise ValueError("createBudget=true needs an alertEmail to notify.")
+ 
++    api_store = str(_context(app, "apiStore", "memory")).strip().lower()
++    if api_store not in {"memory", "dynamodb"}:
++        raise ValueError(f"apiStore must be memory or dynamodb, not '{api_store}'.")
++    api_llm_provider = str(_context(app, "apiLlmProvider", "none")).strip().lower()
++    if api_llm_provider not in {"none", "mock", "bedrock"}:
++        raise ValueError(f"apiLlmProvider must be none, mock or bedrock, not '{api_llm_provider}'.")
++    reserved = int(_context(app, "apiReservedConcurrency", 1))  # 0 = no reservation
++
+     return StageConfig(
+         stage=stage,
+         region=str(_context(app, "region", "us-east-2")),
+@@ -116,4 +129,7 @@
+         budget_limits_usd=tuple(int(v) for v in _as_list(_context(app, "budgetLimitsUsd", [50, 100, 150]))),
+         deployers=tuple(str(v) for v in _as_list(_context(app, "deployers", []))),
+         allowed_origins=tuple(str(v) for v in _as_list(_context(app, "allowedOrigins", ["*"]))),
++        api_store=api_store,
++        api_llm_provider=api_llm_provider,
++        api_reserved_concurrency=reserved or None,
+     )
+diff -ruN a/infra/stacks/web_stack.py b/infra/stacks/web_stack.py
+--- a/infra/stacks/web_stack.py
++++ b/infra/stacks/web_stack.py
+@@ -60,6 +60,23 @@
+         # api_endpoint looks like https://abc123.execute-api.us-east-2.amazonaws.com
+         api_domain = cdk.Fn.select(2, cdk.Fn.split("/", api.http_api.api_endpoint))
+ 
++        # CACHING_DISABLED cannot carry headers in the cache key, and CloudFront only forwards
++        # Authorization when the cache policy includes it: the analyst JWT authorizer and the
++        # customer session token (GET /cases/{id}) need it. The API answers cache-control:
++        # no-store and the TTLs are 0/0/1 s, so nothing is effectively cached.
++        api_cache_policy = cloudfront.CachePolicy(
++            self,
++            "ApiCachePolicy",
++            cache_policy_name=cfg.name("api-forward-auth"),
++            comment="Forward Authorization to the HTTP API; no effective caching",
++            min_ttl=cdk.Duration.seconds(0),
++            default_ttl=cdk.Duration.seconds(0),
++            max_ttl=cdk.Duration.seconds(1),
++            header_behavior=cloudfront.CacheHeaderBehavior.allow_list("Authorization"),
++            query_string_behavior=cloudfront.CacheQueryStringBehavior.all(),
++            cookie_behavior=cloudfront.CacheCookieBehavior.none(),
++        )
++
+         self.distribution = cloudfront.Distribution(
+             self,
+             "Site",
+@@ -75,7 +92,7 @@
+                     origin=origins.HttpOrigin(api_domain),
+                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+                     allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+-                    cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
++                    cache_policy=api_cache_policy,
+                     origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+                     function_associations=[
+                         cloudfront.FunctionAssociation(
+diff -ruN a/infra/tests/test_stacks.py b/infra/tests/test_stacks.py
+--- a/infra/tests/test_stacks.py
++++ b/infra/tests/test_stacks.py
+@@ -143,3 +143,23 @@
+     app = cdk.App(context={**BASE_CONTEXT, "stage": "Dev_Diego"})
+     with pytest.raises(ValueError):
+         load_config(app)
++
++
++def test_api_lambda_has_the_app_environment(dev):
++    functions = dev["api"].find_resources("AWS::Lambda::Function")
++    api = next(f for f in functions.values() if f["Properties"].get("FunctionName") == "expvivo-dev-api")
++    variables = api["Properties"]["Environment"]["Variables"]
++    assert variables["STORE_BACKEND"] in {"memory", "dynamodb"}
++    assert variables["LLM_PROVIDER"] in {"none", "mock", "bedrock"}
++    assert variables["TRACE_DIR"].startswith("/tmp/")  # the only writable path in Lambda
++    if variables["STORE_BACKEND"] == "memory":
++        assert api["Properties"].get("ReservedConcurrentExecutions") == 1
++
++
++def test_api_behavior_forwards_authorization(dev):
++    policies = dev["web"].find_resources("AWS::CloudFront::CachePolicy")
++    headers = [
++        p["Properties"]["CachePolicyConfig"]["ParametersInCacheKeyAndForwardedToOrigin"]["HeadersConfig"]
++        for p in policies.values()
++    ]
++    assert any("Authorization" in h.get("Headers", []) for h in headers)

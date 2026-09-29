@@ -16,8 +16,8 @@ install:
 lint:
 	$(PYTHON) -m compileall -q config src scripts
 
-test:
-	@printf '%s\n' 'test: no tests yet - owners add pytest suites under tests/'
+test:  # arturo: chat API suite (front: cd frontend && npm ci && npm test, needs Node 22.22+/24.15+)
+	$(PYTHON) -m pytest -q tests
 
 build:
 	@printf '%s\n' 'build: nothing to build yet'
@@ -45,7 +45,8 @@ eval:  # cristhian: planted scenarios and test messages against baselines
 	@printf '%s\n' 'eval: not implemented yet (cristhian)'
 
 up:  # arturo: run the API and front end locally with duckdb + mock LLM
-	@printf '%s\n' 'up: not implemented yet (arturo)'
+	cd frontend && npm ci && npm run build
+	$(PYTHON) scripts/local_api.py --port 8000
 
 # Infrastructure (infra/README.md). Use your own stage: make synth STAGE=dev-<yourname>
 
