@@ -7,13 +7,21 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
 ## 1. Chat API
 
 - **Owner:** arturo (front end consumes it)
-- **Status:** Proposed
-- **Current shape:**
-  - `POST /session` `{customer_id, channel: "app"|"whatsapp"|"web", language: "es"|"pt"}` → `{session_token, expires_at}`. In judge mode `customer_id` comes from the prepared-customer picker; session lifetime is 15 minutes.
-  - `POST /chat` `{session_token, message, client_msg_id}` → `{reply_text, buttons: [{id, label}], case_card: <case record, customer-visible fields only> | null, lane: "A"|"B"|"C"|null, trace_id}`
-  - `GET /cases/{case_id}` with the session token → customer-visible case fields and status.
-  - Errors: `{error: {code, message}}` with stable codes: `session_expired`, `not_authorized`, `tool_unavailable`, `model_timeout`, `invalid_request`. Clients branch on `code`, never on `message`.
-- **Last changed:** 2026-09-28T03:30Z
+- **Status:** Agreed (implemented and tested locally; not deployed yet)
+- **Current shape:** field-level types are `frontend/src/api/types.ts`, mirrored by `src/conversation/contract.py`; `tests/test_contract.py` fails on any difference. Behaviour and examples: `docs/interfaz_chat_requerimientos.md`.
+  - Transport: routes below, served under `/api/*` by CloudFront (prefix stripped). JSON UTF-8, body at most 16 KB, every response carries `Cache-Control: no-store`.
+  - Customer session: the app's own opaque token (`secrets.token_urlsafe(32)`; only its sha256 is stored), lifetime `SESSION_TTL_MINUTES` (15). Sent as `Authorization: Bearer <token>`; `x-ev-session: <token>` is accepted as a fallback in case CloudFront drops `Authorization` on GET. Never in the body or the URL. At most 30 turns per session.
+  - `GET /health` → `{status: "ok", stage, deps: "ok"|"missing", demo_clock_scale}`. Needs no dependency; `deps: "missing"` means pydantic/PyYAML are not in the Lambda package.
+  - `POST /session` `{demo_key: "lucia"|"sofia"|"andres"|"joao"|"martina"|"carlos", channel: "web"|"app"|"whatsapp", language?: "es"|"pt"}` → `{session_token, expires_at, customer: {display_name, language, locale, country}, welcome: ChatTurn, synthetic: true}`. The server maps `demo_key` to a customer from its own allow-list; a body with `customer_id` or any unknown field is 400. At most `SESSION_RATE_PER_MINUTE` (60) per source IP, then 429 `rate_limited`.
+  - `POST /chat` `{client_msg_id, message? (max 1000 chars) | button_id?, demo_switches?: {tools_down?, model_slow?, fast_clock?, expire_session?}}` → `{turn, reply_text, reply_language, reply_source: "template"|"model", buttons: [{id, label, kind: "confirm"|"deny"|"choice"|"handoff"}], input_mode: "free_text"|"buttons_only", progress: {step, complaint_type, claimed: {amount, currency, date, merchant_text, card_last4}, missing[]}, case_card: CustomerCaseView|null, lane: "A"|"B"|"C"|null, degraded: ("model_timeout"|"tool_unavailable")[], trace_id, trace_summary: {steps: [{actor, name, latency_ms, version, error_code}], latency_ms, cost_usd, model_id, tokens_in, tokens_out, rule_id, rules_version}, poll_after_ms, demo_switches: {tools_down, model_slow, fast_clock}, synthetic: true}`.
+    - Same `client_msg_id` → the same answer and never a second case. Buttons are server-issued and single use (reuse → 409 `conflict`). A second message of the same session while one is running waits up to 1 s, then 409 `conflict` with `retryable: true`.
+    - A model timeout never fails the turn: 200 with a template reply and `degraded: ["model_timeout"]`. A tool that fails twice sends the case to lane C `tool_failure` with `degraded: ["tool_unavailable"]`.
+    - `demo_switches` exist only for judge-mode sessions (all sessions today); details in `docs/contrato_consola.md`.
+  - `GET /cases/{case_id}` → `{case: CustomerCaseView, poll_after_ms}`. Only the session that opened the case may read it; another session's case and a missing case give the same 403 `not_authorized`. `poll_after_ms` is 5000 while a lane B case is `open`, `investigating` or `awaiting_analyst` or has SLA timers pending, else null.
+  - `CustomerCaseView` (the customer-visible subset of #3, built only by `case.customer_view`): `{case_id, created_at, status, lane, lane_reason_code, subcategory, language, customer_statement, charge: {local_date, amount, currency, merchant_name, card_last4, status}|null, expected_date, first_response_by, handoff_queue, outcome, resolution: {language, text, sent_at, approved_by_human: true}|null, lifecycle_step: "open"|"investigating"|"in_review"|"notified"|"closed"|null, notices: [{kind: "sla_80"|"escalated", text, language, at}], synthetic: true}`.
+  - Errors: `{error: {code, message, retryable}}`. Clients branch on HTTP status, then on `code`, never on `message`. `invalid_request` 400, `session_expired` 401, `not_authorized` 403, `conflict` 409, `session_limit` 409, `precondition` 422, `rate_limited` 429, `internal` 500, `not_implemented` 501, `tool_unavailable` 503, `model_timeout` 504 (never returned by `/chat`). `retryable` is true only for `rate_limited`, `tool_unavailable`, `model_timeout`, `internal`, and for the in-flight `conflict` above. API Gateway's own 401/404 bodies are `{"message": ...}`.
+  - Implemented in https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1 (branch `arturo/m1-chat-api-front`), not merged yet.
+- **Last changed:** 2026-09-29T19:54Z
 
 ## 2. Gateway tools
 
@@ -38,17 +46,23 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Every call is written to the trace (interface 7) with arguments and result IDs.
   - Backends: `duckdb` (local, reads gold tables) and `dynamodb` (cloud, andres). Selected by config, invisible to callers.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #2 (demo backend, `GatewayContext.for_analyst`, `get_customer_profile`, `txn_type`/`reversal_of`, `NotConfirmed`). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 3. Case record
 
 - **Owner:** arturo, with andres for storage (front end and evaluation read it)
-- **Status:** Proposed
-- **Current shape:** one document per case; base fields from v1.4 appendix A plus v2 additions (plan v2, appendix A).
+- **Status:** Agreed (implemented in `src/conversation/case.py`; storage protocol in `src/conversation/store.py`)
+- **Current shape:** one document per case (pydantic `CaseRecord`, extra fields forbidden). `case_id` is `EV-` plus 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`. Money is a decimal string plus ISO 4217 currency; timestamps ISO 8601 UTC; every record is synthetic.
   - Base: `case_id, created_at, channel, language, customer_id, segment, country, subcategory, intent_confidence, urgency_flags[], evidence {transaction, product, app_error}, customer_statement, lane, lane_reason, promise {expected_date, sla_days, p90_days}, actions[{tool, args, result, verified_at}], handoff {queue, priority, open_questions[], facts_verified[]}, clock {assigned_by, first_response_by, sla_alert_at, breach_at}, status, trace_id`
-  - v2: `match {candidates[{txn_id, p}], chosen_id, p_top1, band, model_version}`, `intent {class, p, gate_action, model_version}`, `risk_evidence {features, fraud_score, rule_fired}`, `investigation_id`, `analyst_decision {action, edited, reason, decided_at}`, `labels_emitted[]`
-  - `status`: `open` → `investigating` → `awaiting_analyst` → `notified` → `closed` | `reopened`
-  - Customer-visible subset is defined by the owner in code (one function), not by each screen.
-- **Last changed:** 2026-09-28T03:30Z
+  - v2: `match {candidates[{txn_id, p}], chosen_id, p_top1, band, model_version}`, `intent {class, p, gate_action, model_version}`, `risk_evidence {features, fraud_score, rule_fired}`, `investigation_id` (the stored report's `report_id`), `analyst_decision {action: "approve"|"edit"|"reject", edited, reason, decided_at, decided_by, next: "request_information"|"escalate"|null, draft_text, sent_text}`, `labels_emitted[]`
+  - Console: `version` (int, starts at 1, +1 on every write), `updated_at`, `resolution {language, text, sent_at, approved_by_human: true}` (the text ends with the fixed stamp "approved by a person; no money moves in this demo"), `rules_version` (version of the lane rules YAML that chose the lane).
+  - `evidence.transaction` is a #2 `Txn` (with `txn_type` and `reversal_of`, see the #2 proposal). `customer_statement` is the redacted text. No document number, address or phone anywhere in the record.
+  - `decided_by` is the analyst JWT `sub`, never taken from a request body.
+  - `status`: `open` → `investigating` → `awaiting_analyst` → `notified` → `closed` | `reopened`, plus `resolved_in_contact` (lane A, explained with the record and accepted) and `handed_off` (lane C at creation, or lane B escalated to the senior queue by an analyst).
+  - Views, each built by one function: customer → `case.customer_view` (#1 `CustomerCaseView`); analyst → `case.analyst_view` (every field except `customer_id`, plus the redacted conversation of the case, `lifecycle_step` and `synthetic: true`; #10). Internal fields that never leave the server: `awaiting_customer`, and the cloud lifecycle state (`execution_arn`, `task_token`) that andres defines.
+  - Storage (`src/conversation/store.py` protocols; memory backend today, DynamoDB by andres): `CaseStore.put(case, session_id)` is a conditional write on `version` (stale → `CaseVersionConflict`, 409); `get(case_id)` returns the case plus the owning `session_id`; `all()` feeds the analyst queue (GSI instead of a scan in DynamoDB). Reports, idempotent decision replies and the case conversation live in `ReviewStore`, outside the record, so they never bump `version`.
+  - Implemented in https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1 (branch `arturo/m1-chat-api-front`), not merged yet.
+- **Last changed:** 2026-09-29T19:54Z
 
 ## 4. Model inputs and outputs (M1, M2, M3)
 
@@ -63,6 +77,7 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Thresholds (`band`, `gate_action`) are read from `config/thresholds.yaml`, not hard-coded.
   - Artifacts: `models/<m1|m2|m3>/<version>/`; the version string is returned by every call and stored in the case.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #4 (stand-ins m1-rule-0 and m2-keywords-0 in `src/conversation/`; thresholds and artefacts must live under `src/` or be loaded from `BUCKET_ARTIFACTS`). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 5. Gold and serving tables
 
@@ -73,6 +88,7 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Pipeline functions take one partition at a time (`run_partition(table, date)`) so andres can run the same code in Lambda.
   - No document number, address or phone in any gold table read by models.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #5 (gold columns a real gateway needs). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 6. Investigator report
 
@@ -81,6 +97,7 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
 - **Current shape:** `{report_id, case_id, created_at, findings: [{claim, evidence_ids[]}], hypotheses: [{name: "fraud"|"forgotten_purchase"|"unfamiliar_merchant_name"|"duplicate"|"fee_error"|"pending_reversal", p}], recommendation: "reverse_fee"|"open_chargeback"|"block_card"|"explain_and_close"|"request_information"|"escalate", confidence, draft_reply {language, text}, open_questions[], citations_valid: bool, removed_claims: int, tool_calls: int, latency_ms, model_id, prompt_version}`
   - Every `evidence_id` must appear in this run's tool results; the check runs in code before the report is stored.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #6 (`evidence_records`, citation check rules, stub until G2). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 7. Trace event
 
@@ -90,6 +107,7 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Locally written to `data/traces/*.jsonl`; in the cloud to S3 and queried with Athena.
   - No free-text PII in traces; message text is stored by reference.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #7 (fields, ids and actor/name values the application writes). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 8. LLM client
 
@@ -101,6 +119,7 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Providers: `mock` (default locally; returns fixtures from `tests/fixtures/llm/`, deterministic) and `bedrock` (cloud, andres). Tool use for the investigator goes through the same package.
   - Timeout 8 s for `chat`; callers handle `model_timeout` with templates.
 - **Last changed:** 2026-09-28T03:30Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #8 (prompts under `src/` because the Lambda asset is only `src/`; `LLM_PROVIDER` values; G1 contract). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 9. Runtime environment variables (infrastructure ↔ application code)
 
@@ -116,3 +135,17 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Lambda entry points: `src/handlers/api.handler`, `investigator.handler`, `case_steps.handler` (actions `register_task_token`, `mark_incomplete`, `notify_customer`, `sla_timer`), `pipeline.handler` (event `{table, date}`)
   - HTTP routes are served under `/api/*` by CloudFront; CloudFront strips the prefix, so the API itself keeps the routes in #1. Analyst routes are `GET /analyst/cases`, `GET /analyst/cases/{case_id}`, `POST /analyst/cases/{case_id}/decision` and require a Cognito JWT.
 - **Last changed:** 2026-09-28T04:40Z
+- **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #9 (new variables `STORE_BACKEND`, `LIFECYCLE_BACKEND`, `LOCAL_INVESTIGATION_DELAY_SECONDS`, `SESSION_RATE_PER_MINUTE`, `TRACE_DIR`; `x-ev-session` header). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
+
+## 10. Analyst console API
+
+- **Owner:** arturo (console front end; andres for Cognito and the cloud lifecycle; cristhian reads `labels_emitted` for evaluation)
+- **Status:** Proposed (implemented and tested locally)
+- **Current shape:** types in `frontend/src/api/types.ts` (analyst section), mirrored by `src/conversation/contract.py`; rules in `docs/contrato_consola.md`.
+  - Auth: API Gateway's Cognito JWT authorizer runs first; the handler reads only `requestContext.authorizer.jwt.claims` (no claims or no `sub` → 401 `session_expired`). `decided_by` = claim `sub`. No authentication bypass in `src/`; locally `scripts/local_api.py` imitates the authorizer with `LOCAL_ANALYST_TOKEN`.
+  - `GET /analyst/cases?status=&lane=&language=&limit=&cursor=` → `{items[], next_cursor, as_of, poll_after_ms: 15000}`; each item carries `sla_alerts: ("unassigned"|"sla_80"|"breached")[]`. Lane B and lane C cases (lane C read only); cases still waiting for someone first, then high priority, `breach_at` ascending, `created_at`, `case_id`. `limit` 1..50 (default 20); unknown or out-of-range parameter → 400.
+  - `GET /analyst/cases/{case_id}` → `{case: AnalystCaseView (with `clock_events[]` and the redacted `conversation[]`), report: InvestigatorReport|null, context: {profile, cards, evidence_txns, prior_contacts, risk_evidence, unavailable[]}, allowed_actions, version}`. `customer_id` for the context comes from the stored case. Missing case → 403 like any other 403.
+  - `POST /analyst/cases/{case_id}/decision` `{client_decision_id, version, action: "approve"|"edit"|"reject", reply?, reason?, next?: "request_information"|"escalate", labels?: {intent_class? | intent_confirmed?}, evidence_reviewed?}` → `{case_id, status, analyst_decision, labels_emitted}`. approve sends the report draft; edit needs `reply` and `reason`; reject needs `reason` and `next` (escalate sends nothing and moves the case to the senior queue). Every sent text is stamped as approved by a person. Bad shape → 400; stale `version` or already decided → 409 (same `client_decision_id` and body → the stored response); wrong state, no draft, wrong reply language, unreliable report without `evidence_reviewed` → 422 `precondition`.
+  - `labels_emitted` convention `type:value[:detail]`: `decision:<action>`, `recommendation:<rec>:<accepted|edited|rejected>`, `lane:<lane>:<confirmed|escalated>`, `reply:<as_drafted|edited|template>`, `intent:<class>:confirmed` or `intent:<predicted>:corrected_to:<new>`.
+  - Implemented in https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1 (branch `arturo/m1-chat-api-front`), not merged yet.
+- **Last changed:** 2026-09-29T19:54Z
