@@ -21,12 +21,13 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - `CustomerCaseView` (the customer-visible subset of #3, built only by `case.customer_view`): `{case_id, created_at, status, lane, lane_reason_code, subcategory, language, customer_statement, charge: {local_date, amount, currency, merchant_name, card_last4, status}|null, expected_date, first_response_by, handoff_queue, outcome, resolution: {language, text, sent_at, approved_by_human: true}|null, lifecycle_step: "open"|"investigating"|"in_review"|"notified"|"closed"|null, notices: [{kind: "sla_80"|"escalated", text, language, at}], synthetic: true}`.
   - Errors: `{error: {code, message, retryable}}`. Clients branch on HTTP status, then on `code`, never on `message`. `invalid_request` 400, `session_expired` 401, `not_authorized` 403, `conflict` 409, `session_limit` 409, `precondition` 422, `rate_limited` 429, `internal` 500, `not_implemented` 501, `tool_unavailable` 503, `model_timeout` 504 (never returned by `/chat`). `retryable` is true only for `rate_limited`, `tool_unavailable`, `model_timeout`, `internal`, and for the in-flight `conflict` above. API Gateway's own 401/404 bodies are `{"message": ...}`.
   - Implemented in https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1 (branch `arturo/m1-chat-api-front`), not merged yet.
-- **Last changed:** 2026-09-29T19:54Z
+  - `GET /evaluation` (public, no token; added with the evaluation page, D14) → `{available, report, synthetic: true}`, always 200. `report` is the latest `make eval` report (`EVAL_REPORT_PATH`, else `data/eval/report_latest.yaml`; in AWS the artifacts bucket's `eval/report_latest.yaml`) without its per-scenario rows (`row_counts` instead); missing or unreadable → `available: false, report: null`. Code: `src/conversation/evaluation.py`; types mirrored in `frontend/src/api/types.ts`.
+- **Last changed:** 2026-10-30T05:53Z
 
 ## 2. Gateway tools
 
-- **Owner:** andres (used by arturo's orchestrator, cristhian's models, the investigator)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from andres, D14; used by the orchestrator, the models and the investigator)
+- **Status:** Agreed (implemented and tested locally: `src/gateway/`; not deployed)
 - **Current shape:** Python package `src/gateway/`. Every function takes `ctx: GatewayContext` as its first argument; `ctx.customer_id` comes from the verified session, **never** from message text or a function argument. Functions only return records owned by `ctx.customer_id`; anything else raises.
   - `find_candidate_txns(ctx, date_from, date_to, amount_hint=None, currency=None, limit=200) -> list[Txn]`
   - `get_transaction(ctx, txn_id) -> Txn`
@@ -45,12 +46,15 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Errors: `NotOwned`, `NotFound`, `ToolUnavailable` (retry at most twice with backoff, then the caller takes the safe path).
   - Every call is written to the trace (interface 7) with arguments and result IDs.
   - Backends: `duckdb` (local, reads gold tables) and `dynamodb` (cloud, andres). Selected by config, invisible to callers.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): `src/gateway/types.py` holds every record and error (the `demo` store re-exports them), `GatewayContext.for_analyst`, `get_customer_profile`, `Txn.txn_type`/`reversal_of`, `NotConfirmed`, plus `DigitalSession`, `MerchantStats`, `RiskEvidence`. Backends by `GATEWAY_BACKEND`: `demo` (judge-mode customers), `duckdb` (`src/gateway/duckdb_backend.py`, gold tables with indexes on customer and txn), `composite` (demo customers from the demo store, dataset customers from gold, chosen by the server-side customer id). `dynamodb`: not built (the serving export it would read exists).
+  - duckdb specifics: `find_candidate_txns` leaves out reversals, deposits and declined movements; `find_duplicates` requires the same product; a charge the dataset marks `reversed` gets a derived reversal record (`REV-<txn_id>`, `origin=derived_from_status`); `get_prior_contacts` returns the last 365 days up to the reference date; `get_risk_evidence` calls M3; failure switch and card blocks are shared with the demo store (`src/gateway/state.py`). Evaluation only: `plant(customer_id, txns, hide, contacts, reference_date)` overlays synthetic records and an as-of date on one customer.
+  - Cloud (D14, tested offline with moto, not deployed): `GATEWAY_BACKEND=dynamodb` (`src/cloud/dynamodb_gateway.py`) reads the serving table written by `src/pipeline/serving.py` (every read is a Query on `pk=CUST#<id>`, cached `SERVING_CACHE_SECONDS`); `composite` with `GATEWAY_DATA_BACKEND=dynamodb` is what the CDK sets. A transaction outside the caller's partition is resolved through the keys-only GSI `by_txn` (`SERVING_TXN_INDEX`) to decide `NotOwned` vs `NotFound` without reading the other customer's record (both answer the same 403). `get_digital_sessions` returns `[]` in the cloud (the serving export has no sessions).
+- **Last changed:** 2026-10-30T05:53Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #2 (demo backend, `GatewayContext.for_analyst`, `get_customer_profile`, `txn_type`/`reversal_of`, `NotConfirmed`). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 3. Case record
 
-- **Owner:** arturo, with andres for storage (front end and evaluation read it)
+- **Owner:** arturo (storage and cloud lifecycle taken over from andres, D14; front end and evaluation read it)
 - **Status:** Agreed (implemented in `src/conversation/case.py`; storage protocol in `src/conversation/store.py`)
 - **Current shape:** one document per case (pydantic `CaseRecord`, extra fields forbidden). `case_id` is `EV-` plus 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`. Money is a decimal string plus ISO 4217 currency; timestamps ISO 8601 UTC; every record is synthetic.
   - Base: `case_id, created_at, channel, language, customer_id, segment, country, subcategory, intent_confidence, urgency_flags[], evidence {transaction, product, app_error}, customer_statement, lane, lane_reason, promise {expected_date, sla_days, p90_days}, actions[{tool, args, result, verified_at}], handoff {queue, priority, open_questions[], facts_verified[]}, clock {assigned_by, first_response_by, sla_alert_at, breach_at}, status, trace_id`
@@ -62,12 +66,13 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Views, each built by one function: customer → `case.customer_view` (#1 `CustomerCaseView`); analyst → `case.analyst_view` (every field except `customer_id`, plus the redacted conversation of the case, `lifecycle_step` and `synthetic: true`; #10). Internal fields that never leave the server: `awaiting_customer`, and the cloud lifecycle state (`execution_arn`, `task_token`) that andres defines.
   - Storage (`src/conversation/store.py` protocols; memory backend today, DynamoDB by andres): `CaseStore.put(case, session_id)` is a conditional write on `version` (stale → `CaseVersionConflict`, 409); `get(case_id)` returns the case plus the owning `session_id`; `all()` feeds the analyst queue (GSI instead of a scan in DynamoDB). Reports, idempotent decision replies and the case conversation live in `ReviewStore`, outside the record, so they never bump `version`.
   - Implemented in https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1 (branch `arturo/m1-chat-api-front`), not merged yet.
-- **Last changed:** 2026-09-29T19:54Z
+  - Cloud storage (D14, tested offline with moto, not deployed): `src/cloud/dynamodb_store.py`. Sessions keep `expires_at_epoch` for the DynamoDB TTL and a pointer item `TOKEN#<sha256>` read consistently (no GSI); cases are a conditional UpdateItem on `version` (new case: `attribute_not_exists`), the queue reads the sparse GSI `by_queue` (lanes B and C) then BatchGetItem; `ReviewStore` items live in the Cases table (`REPORT#<case>`, `CONV#<case>`, `DECISION#<key>`). Cloud lifecycle state on the case item, never in `CaseRecord`: `execution_arn`, `execution_round`, `decided_round`, `task_token`, `task_error`, `lc_step` (`src/cloud/stepfunctions_lifecycle.py`; executions `<case>-r<round>`, SLA timers are EventBridge Scheduler schedules `<case>-<kind>`).
+- **Last changed:** 2026-10-30T05:53Z
 
 ## 4. Model inputs and outputs (M1, M2, M3)
 
-- **Owner:** cristhian (arturo's orchestrator and the gateway call these)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from cristhian, D14)
+- **Status:** Agreed (implemented: `src/models/`, `make train`; artifacts committed under `src/models/artifacts/`)
 - **Current shape:** Python package `src/models/`, pure functions, no network calls, loaded once per process.
   - M1 `rank_candidates(slots, candidates: list[Txn]) -> {ranked: [{txn_id, p}], band: "confirm"|"choose"|"ask", model_version}`
     - `slots`: `{amount, currency, date, date_is_relative, merchant_text, card_last4}`; any field may be null.
@@ -76,55 +81,62 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - M3 `risk_features(txn: Txn, baseline: Baseline) -> {features: {name: value}, lift_score: float|null, model_version}`
   - Thresholds (`band`, `gate_action`) are read from `config/thresholds.yaml`, not hard-coded.
   - Artifacts: `models/<m1|m2|m3>/<version>/`; the version string is returned by every call and stored in the case.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): `models.m1.rank_candidates(slots, candidates)` (+ `band_for`, `CONFIRM_THRESHOLD`, `probabilities`): LightGBM LambdaRank plus a confidence model (LightGBM binary on a calibration split, isotonic on validation); pure-Python evaluation of the LightGBM text models in the Lambda; `primary: model|rule` in `src/models/thresholds.yaml` decided on the frozen test (rule = `m1-rule-0`). `models.m2.classify(text, language)`. `models.m3.risk_features(txn, baseline, recent_txns=, sessions=, channel=, txn_country=, customer_country=)`; `lift_score` stays null (no significant lift).
+  - Thresholds live in `src/models/thresholds.yaml` (one key per model, written only by training), not `config/` (the Lambda asset is `src/`). The app picks the backends with `M1_BACKEND` (`rule`|`model`) and `M2_BACKEND` (`keywords`|`model`) through `src/conversation/models_port.py`; the manipulation patterns stay a rule guard OR-ed with M2.
+- **Last changed:** 2026-10-30T04:48Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #4 (stand-ins m1-rule-0 and m2-keywords-0 in `src/conversation/`; thresholds and artefacts must live under `src/` or be loaded from `BUCKET_ARTIFACTS`). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 5. Gold and serving tables
 
-- **Owner:** diego (everyone reads them)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from diego, D14)
+- **Status:** Agreed (implemented: `src/pipeline/`, `make pipeline`; schemas in `docs/data/gold_tables.md`)
 - **Current shape:** produced by the pipeline from `data/processed/latam_bank.duckdb`; written as Parquet under `data/gold/<table>/` locally. Table list from plan v2 section 8: `customer_profile, customer_products, transactions_enriched, customer_baseline, merchant_stats, complaints_baseline, fee_schedule, contact_history, labels`.
   - Column-level schemas live in `docs/data/gold_tables.md` (diego writes it Monday; this entry then links the agreed version).
   - Pipeline functions take one partition at a time (`run_partition(table, date)`) so andres can run the same code in Lambda.
   - No document number, address or phone in any gold table read by models.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): raw CSV (organizers' bucket or the synthetic replica, D15) -> bronze (all VARCHAR + lineage, schema contract per header) -> silver (v1.4 SQL, dq_ flags) -> 194 quality contracts (`src/pipeline/contracts/silver.yml`, `docs/data/dq_report.md`) -> gold `customer_products, customer_profile, transactions_enriched, fee_schedule (synthetic), fee_charges (synthetic), customer_baseline, customer_category_baseline, merchant_stats, complaints_baseline, contact_history, digital_sessions, kpi_baseline, cc_category_baseline, labels` -> DynamoDB import file (`src/pipeline/serving.py`). `run_partition(table, date)` processes one daily partition (the Lambda unit); `data/gold/_meta.yaml` states the data source.
+- **Last changed:** 2026-10-30T04:48Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #5 (gold columns a real gateway needs). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 6. Investigator report
 
-- **Owner:** andres (analyst console and evaluation read it)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from andres, D14; analyst console and evaluation read it)
+- **Status:** Agreed (implemented: `src/investigator/`, `INVESTIGATOR_BACKEND=g2`)
 - **Current shape:** `{report_id, case_id, created_at, findings: [{claim, evidence_ids[]}], hypotheses: [{name: "fraud"|"forgotten_purchase"|"unfamiliar_merchant_name"|"duplicate"|"fee_error"|"pending_reversal", p}], recommendation: "reverse_fee"|"open_chargeback"|"block_card"|"explain_and_close"|"request_information"|"escalate", confidence, draft_reply {language, text}, open_questions[], citations_valid: bool, removed_claims: int, tool_calls: int, latency_ms, model_id, prompt_version}`
   - Every `evidence_id` must appear in this run's tool results; the check runs in code before the report is stored.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): the shape above plus `evidence_records` (proposal text in `docs/propuestas_interfaces.md`). G2 runs its own loop over `llm.converse` with the Appendix B tools and a `submit_report` tool (prompt `src/prompts/g2_investigator/v1.md`); budget `INVESTIGATOR_MAX_TOOL_CALLS` (12) and `INVESTIGATOR_MAX_SECONDS` (90); fixed hypothesis and recommendation lists, draft in the case language without promises, citation check in code. Without model credentials the deterministic policy drives the same loop (`model_id: policy-g2-v1`, labelled "sin modelo" in the console). The stub stays as `INVESTIGATOR_BACKEND=stub`.
+- **Last changed:** 2026-10-30T04:48Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #6 (`evidence_records`, citation check rules, stub until G2). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 7. Trace event
 
-- **Owner:** andres, with diego for storage and queries (trace view and evaluation page read it)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from andres and diego, D14; trace view and evaluation read it)
+- **Status:** Agreed (implemented as written by the app; queries in `src/eval/traces.py`)
 - **Current shape:** one JSON line per step: `{trace_id, session_id, case_id, turn, step, actor: "rule"|"model"|"tool"|"human", name, input_ref, output_ref, latency_ms, tokens_in, tokens_out, cost_usd, version, error_code, ts}`
   - Locally written to `data/traces/*.jsonl`; in the cloud to S3 and queried with Athena.
   - No free-text PII in traces; message text is stored by reference.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): the fields in the #7 proposal; the investigator adds `actor: model, name: investigator`. Queries (latency p50/p95 per turn, steps, errors, model calls and cost, sessions, lifecycle) in `src/eval/traces.py` over `data/traces/*.jsonl`; the same SQL runs in Athena.
+  - Cloud (D14): `TRACE_SINK` = `stdout` (default in AWS: JSON lines to CloudWatch) | `s3` (buffered JSONL under `traces/dt=`) | `jsonl` (local files). Lifecycle `step` numbers come from an atomic counter on the case item; new lifecycle events `lifecycle.start`, `lifecycle.task_success`, `lifecycle.notify` (`src/cloud/traces.py`).
+- **Last changed:** 2026-10-30T05:53Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #7 (fields, ids and actor/name values the application writes). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 8. LLM client
 
-- **Owner:** andres (used by arturo for G1, andres for G2, cristhian for G3 and baselines)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from andres, D14; used by G1, G2, G3 and the baselines)
+- **Status:** Agreed (implemented: `src/llm/`; guide `docs/llm_client.md`)
 - **Current shape:** Python package `src/llm/`. `complete(prompt_id, variables, output_schema=None, model_role="chat"|"investigator"|"judge") -> {output, usage: {tokens_in, tokens_out, cost_usd}, model_id, prompt_version}`
   - Prompts live in `prompts/<prompt_id>/<version>.md`; callers pass variables, never raw prompt strings.
   - `model_role` maps to a model ID in config (chat → Haiku 4.5, investigator → Sonnet 5, judge → Opus 5). No caller hard-codes a model ID.
   - Providers: `mock` (default locally; returns fixtures from `tests/fixtures/llm/`, deterministic) and `bedrock` (cloud, andres). Tool use for the investigator goes through the same package.
   - Timeout 8 s for `chat`; callers handle `model_timeout` with templates.
-- **Last changed:** 2026-09-28T03:30Z
+  - Implemented (D14): `complete(prompt_id, variables, output_schema=None, model_role=...)` and `converse(system, messages, tools, model_role=...)`; providers `mock`, `none`, `anthropic` (Anthropic API, key read by the SDK) and `bedrock` (Mantle client, us-east-2); model IDs by role from `MODEL_CHAT`/`MODEL_INVESTIGATOR`/`MODEL_JUDGE` or `src/llm/models.yaml` (D5); prompts under `src/prompts/` and `src/conversation/prompts/`; errors `TimeoutError`, `ProviderUnavailable`, `ModelError`; usage with `estimated` and cache counts; no sampling parameters, no forced tool choice.
+- **Last changed:** 2026-10-30T04:48Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #8 (prompts under `src/` because the Lambda asset is only `src/`; `LLM_PROVIDER` values; G1 contract). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 9. Runtime environment variables (infrastructure ↔ application code)
 
-- **Owner:** andres (defined in `infra/stacks/`; every Lambda handler reads them)
-- **Status:** Proposed
+- **Owner:** arturo (taken over from andres, D14; set by CDK in AWS, by `.env` locally)
+- **Status:** Agreed (implemented in code and set by the CDK in `infra/`; `cdk synth` and the infra tests pass; not deployed)
 - **Current shape:** application code reads configuration only from these variables (locally from `.env`, in AWS set by CDK). Adding or renaming one is an interface change.
   - All functions: `STAGE`
   - Data (`DataStack.table_environment`): `TABLE_SESSIONS`, `TABLE_CASES`, `TABLE_SERVING`, `TABLE_DEMO`, `BUCKET_LAKE`, `BUCKET_ARTIFACTS`, `BUCKET_TRACES`, `GLUE_DATABASE`, `ATHENA_WORKGROUP`
@@ -134,7 +146,9 @@ Every boundary below is **Proposed** (drafted from plan v2). The owner confirms 
   - Pipeline only: `BUCKET_RAW`
   - Lambda entry points: `src/handlers/api.handler`, `investigator.handler`, `case_steps.handler` (actions `register_task_token`, `mark_incomplete`, `notify_customer`, `sla_timer`), `pipeline.handler` (event `{table, date}`)
   - HTTP routes are served under `/api/*` by CloudFront; CloudFront strips the prefix, so the API itself keeps the routes in #1. Analyst routes are `GET /analyst/cases`, `GET /analyst/cases/{case_id}`, `POST /analyst/cases/{case_id}/decision` and require a Cognito JWT.
-- **Last changed:** 2026-09-28T04:40Z
+  - Added by the v2 code (D14): `GATEWAY_BACKEND` (demo|duckdb|composite), `M1_BACKEND` (rule|model), `M2_BACKEND` (keywords|model), `INVESTIGATOR_BACKEND` (stub|g2), `INVESTIGATOR_MAX_SECONDS` (90), `LLM_PROVIDER` adds `anthropic`, `AWS_REGION` (bedrock), `DATA_DIR`, `EVAL_REPORT_PATH`; `MODEL_*` now select the model. Defaults when unset reproduce the M1 build; `scripts/local_api.py` defaults to the full v2 configuration. Bedrock through the Mantle client needs `bedrock-mantle:CreateInference` in the role.
+  - Added for the cloud (D14, set by the CDK in `infra/`): `GATEWAY_DATA_BACKEND` (duckdb|dynamodb), `TRACE_SINK`, `CASE_CLOSE_AFTER_SECONDS`, `SERVING_CACHE_SECONDS`, `SERVING_TXN_INDEX`; pipeline Lambda: `RAW_PREFIX`, `DATA_DIR` (/tmp/data), `DUCKDB_MEMORY`, `DUCKDB_THREADS`; the cloud lifecycle also reads `LOCAL_SLA_SCALE` (fast clock). Case-steps action `close_case` is new; the pipeline handler takes `{step: dimensions}`, `{table, date, refresh_gold}` and `{step: gold, serving}`. New CDK context keys: `llmProvider`, `investigatorBackend`, `rawPrefix`, `pipelineStorageMb`, `servingImport`, `bedrockMantleResources` (`docs/despliegue_aws.md`).
+- **Last changed:** 2026-10-30T05:53Z
 - **Proposed change (arturo, 2026-09-29T19:54Z, waiting for the owner):** #9 (new variables `STORE_BACKEND`, `LIFECYCLE_BACKEND`, `LOCAL_INVESTIGATION_DELAY_SECONDS`, `SESSION_RATE_PER_MINUTE`, `TRACE_DIR`; `x-ev-session` header). Exact text in `docs/propuestas_interfaces.md` (https://github.com/DDR2AS/factored-hackathon-2026-Datti/pull/1); the current shape above is unchanged until the owner accepts it.
 
 ## 10. Analyst console API
