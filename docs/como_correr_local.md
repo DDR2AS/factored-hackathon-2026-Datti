@@ -1,11 +1,31 @@
 # Cómo correr la API y el front en local
 
-Expediente Vivo v2, repo del equipo. Todo es local: no llama a AWS ni a ningún modelo (G1 usa un proveedor mock determinista, ver "Extracción G1"). Clientes, cargos y textos son sintéticos.
+Expediente Vivo v2, repo del equipo. Todo es local: no llama a AWS ni a ningún modelo salvo que lo configures (G1 y G2 usan un proveedor mock / una política determinista; ver "Extracción G1" y `docs/llm_client.md`). Clientes, cargos y textos son sintéticos.
+
+## Recorrido completo v2 (datos → modelos → evaluación → demo)
+
+Desde la raíz del repo, con el venv activo (Windows sin `make`: corre el comando de la derecha).
+
+| Paso | `make` | Comando | Qué hace | Tiempo aprox. |
+|---|---|---|---|---|
+| 1 | `make install` | `python -m pip install -r requirements.txt` | Dependencias (pipeline, modelos, cliente LLM) | 2–3 min |
+| 2 | `make data` | `python scripts/get_data.py` | Con la llave S3 del diccionario de datos en `.env` (`AWS_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) descarga el dataset real; **sin llave genera la réplica sintética** de las 13 tablas (`src/etl/synth_dataset.py`, 4.000 clientes, marcada `data/raw/_SYNTHETIC_REPLICA.txt`; D15). `--customers 1500` para una prueba rápida | 3 min (réplica) |
+| 3 | `make pipeline` | `python scripts/run_pipeline.py --serving` | bronze → silver → 194 contratos de calidad (`docs/data/dq_report.md`) → 14 tablas gold (`docs/data/gold_tables.md`) → archivo de importación DynamoDB. Una partición: `python scripts/run_pipeline.py --partition transactions 2026-06-17` | 5 min |
+| 4 | `make train` | `python scripts/train.py` | M1 (ranker), M2 (intención), M3 (evidencia de riesgo + experimento de lift). Reportes en `docs/modelos/` | 4 min |
+| 5 | `make eval` | `python scripts/evaluate.py` | 240 escenarios sembrados de punta a punta, v2 frente a B1 (v1.4 solo reglas) → `docs/evaluacion.md` y la página de evaluación | 1 min |
+| 6 | — | `python scripts/learning_loop.py` | Una vuelta del ciclo de aprendizaje con decisiones de analista SIMULADAS (etiquetas → reentrenar M1 → promover solo si mejora) | 3 min |
+| 7 | `make up` | `cd frontend && npm ci && npm run build` y `python scripts/local_api.py --port 8000` | API + front en http://127.0.0.1:8000 | 1 min |
+
+Configuración por defecto de `scripts/local_api.py` (v2 completo; cada variable se puede cambiar en `.env`, ver `.env.test`): `GATEWAY_BACKEND=composite` (los seis clientes del modo juez desde el almacén demo y los clientes del dataset desde gold), `M1_BACKEND=model`, `M2_BACKEND=model`, `INVESTIGATOR_BACKEND=g2`, `LLM_PROVIDER=mock`. `--config b1` levanta la versión v1.4 solo reglas para comparar. Con `LLM_PROVIDER=anthropic` (y `ANTHROPIC_API_KEY` en tu entorno, nunca en archivos) G1 y G2 usan Claude; `python scripts/llm_smoke.py` hace una llamada de prueba.
+
+Página de evaluación: http://127.0.0.1:8000/#/evaluacion (también desde el modo juez y la consola). Lee `GET /api/evaluation`, pública y sin token, que sirve el último `data/eval/report_latest.yaml` (o `EVAL_REPORT_PATH`) sin las filas por escenario; después de un `make eval` nuevo basta con recargar. Sin reporte la página dice que todavía no hay evaluación.
+
+Otras herramientas: `python scripts/trace_report.py` (consultas sobre `data/traces/*.jsonl`, las mismas que en Athena), `python scripts/judge.py --prepare` (planilla para puntuar 50 respuestas a mano y validar el juez G3) y `python scripts/judge.py --run` (requiere un modelo).
 
 ## Requisitos
 
 - Python 3.12 (la Lambda corre 3.12; la suite también pasa en 3.11, que usa el CI). En un clon limpio, crear el venv una vez: `py -3.12 -m venv .venv` (o `python -m venv .venv`), activarlo y `python -m pip install -r requirements.txt`.
-- Node 24 (o 22.22+) para el front (hay Node 24 instalado).
+- Node 24 (o 22.22+) para el front. Sin instalador con permisos de administrador sirve el zip portable oficial de nodejs.org (agregar su carpeta al `PATH`).
 
 En Git Bash, desde la raíz del repo:
 
@@ -35,7 +55,7 @@ Opciones:
 | `--ttl-minutes 1` | Sesiones de 1 minuto para probar `session_expired`. Acepta decimales, por ejemplo `0.05` son 3 s |
 | `--fail model` | Conecta un modelo falso que responde después de `LLM_TIMEOUT_SECONDS` (8 s por defecto; para la demo conviene `LLM_TIMEOUT_SECONDS=2`). Cada turno devuelve `degraded: ["model_timeout"]`; responde el extractor por reglas y, si no entendió nada, la plantilla `model_slow` con botones fijos. Se puede combinar con `--fail tools` |
 | `SESSION_RATE_PER_MINUTE` (variable) | Máximo de `POST /session` por minuto y por IP (60 por defecto, 0 lo apaga); el siguiente es 429 `rate_limited`. Las sesiones vencidas se borran de la memoria |
-| `--investigation-delay 2` | Segundos entre abrir un caso de ruta B y tener el reporte del investigador (stub provisional). 4 por defecto; 2 es cómodo para la demo. También `LOCAL_INVESTIGATION_DELAY_SECONDS` |
+| `--investigation-delay 2` | Segundos entre abrir un caso de ruta B y correr el investigador G2 (`INVESTIGATOR_BACKEND=g2`; sin credenciales de modelo lo conduce la política determinista `policy-g2-v1`). 4 por defecto; 2 es cómodo para la demo. También `LOCAL_INVESTIGATION_DELAY_SECONDS`. El stub anterior sigue con `INVESTIGATOR_BACKEND=stub` |
 | `--sla-scale 0.00001` | Qué hace el interruptor `fast_clock` con los temporizadores de SLA de los casos de esa sesión: sus tiempos se multiplican por este factor. Por defecto 1/1440 (1 día = 1 minuto: sin asignar a 1 min, aviso del 80 % a 12 min, vencido a 15 min). Para una prueba rápida, `0.00001`: sin asignar a 0,9 s, 80 % a 10,4 s, vencido a 13 s. Las sesiones sin `fast_clock` van siempre en tiempo real. También `LOCAL_SLA_SCALE` (0 < x ≤ 1) |
 | `--llm mock` / `--llm none` | Extractor G1. `mock` (por defecto, `LLM_PROVIDER=mock`): el proveedor mock responde desde `tests/fixtures/llm/g1_extract/*.yaml`; `none`: solo el extractor por reglas. Gana sobre `LLM_PROVIDER` de `.env` y del entorno. La segunda línea al arrancar dice qué quedó activo |
 | `--port`, `--host` | Por defecto `127.0.0.1:8000` |
@@ -50,7 +70,7 @@ Cada mensaje escrito pasa por: redacción (documento, dirección, teléfono, tar
 |---|---|
 | `mock` (por defecto en `local_api.py`) | `MockLLMClient`: busca el texto REDACTADO y normalizado (más la fecha de referencia del cliente) en `tests/fixtures/llm/g1_extract/*.yaml`. Con fixture: `model_id: "mock-g1"`, `prompt_version: "g1_extract@v1"`, tokens estimados (caracteres / 4) y `cost_usd` con los precios por rol de `src/conversation/llm_prices.yaml` (estimación, `usage.estimated: true`). Sin fixture: `NoFixture`, responde la regex, sin `degraded`, y la traza dice `error_code: "no_fixture"`. `MODEL_CHAT` solo se muestra al arrancar |
 | `none` (o sin definir) | Sin modelo: la regex en cada turno |
-| `bedrock` | El paquete `src/llm` de Andrés. Todavía no existe: cada turno cae a la regex con `degraded: ["model_timeout"]` y `error_code: "model_unavailable"` ("pendiente de Andrés") |
+| `anthropic` / `bedrock` | El paquete `src/llm` (cliente #8, guía en `docs/llm_client.md`): Claude por la API de Anthropic (`ANTHROPIC_API_KEY` en el entorno, nunca en archivos) o por Amazon Bedrock (us-east-2, credenciales de AWS). Sin credenciales o sin acceso cada turno cae a la regex con `degraded: ["model_timeout"]` y `error_code: "model_unavailable"`. `python scripts/llm_smoke.py` hace una llamada de prueba |
 
 Reglas que no cambian con el proveedor: el modelo solo extrae datos; nunca elige la ruta (la decide `lane_rules.yaml`), nunca ve documento, dirección ni teléfono, no tiene herramientas y ningún texto que lee el cliente sale de él (`reply_source` sigue en `"template"`). El texto del cliente va entre `<texto_cliente>` y `</texto_cliente>`, declarado como dato; si trae esas etiquetas se borran antes. Un mensaje con inyección lo marca antes el clasificador y G1 ni se llama.
 
@@ -64,7 +84,7 @@ En `trace_summary`: paso `{actor: "model", name: "g1_extract", version: "g1_extr
 
 Fixtures: un archivo por cliente demo, marcado `synthetic: true`, con los mensajes sugeridos del modo juez (`kind: suggestion`) y 5 variantes por cliente donde el modelo gana a la regex (`kind: variant`, `beats_regex` dice en qué campos: "el martes pasado", "ontem", "no dia primeiro", "cuatrocientos cincuenta", "52 lucas", "terminada en cinco cinco uno dos", "¿me pueden pasar con alguien?", …). Son distintas de los mensajes de prueba escritos por el equipo; `tests/test_g1.py` lo comprueba. Para probar a mano: Sofía, "El martes pasado me cobraron un domicilio de cincuenta y dos mil pesos que no pedí" → con `--llm mock` la fecha dicha es 2026-06-09; con `--llm none`, 2026-06-16.
 
-Ubicación de los prompts: INTERFACES.md #8 dice `prompts/<prompt_id>/<version>.md` en la raíz, pero el asset de la Lambda es solo `src/` (`infra/stacks/common.py`), así que una carpeta `prompts/` en la raíz no se desplegaría. Propuesta a Andrés: los prompts viven en `src/conversation/prompts/`; el cargador (`llm_port.load_prompt`) busca ahí primero y después en `prompts/`. Los fixtures del mock siguen en `tests/fixtures/llm/` como dice #8 (no van en la Lambda: un mock desplegado respondería siempre con la regex).
+Ubicación de los prompts: INTERFACES.md #8 dice `prompts/<prompt_id>/<version>.md` en la raíz, pero el asset de la Lambda es solo `src/` (`infra/stacks/common.py`), así que una carpeta `prompts/` en la raíz no se desplegaría. Por eso los prompts viven en `src/prompts/` (G2 investigador, G3 juez) y `src/conversation/prompts/` (G1); el cargador (`llm_port.load_prompt` y `src/llm`) busca en ese orden y al final en `prompts/`. Los fixtures del mock siguen en `tests/fixtures/llm/` como dice #8 (no van en la Lambda: un mock desplegado respondería siempre con la regex).
 
 ## Levantar el front
 
@@ -83,7 +103,7 @@ Hay dos formas:
 Circuito completo para mostrar (dos pestañas):
 
 1. Pestaña del chat: Lucía, "me cobraron como 450 en el super el 12" → Es este → No lo reconozco. La tarjeta pasa sola de "Investigando" a "En revisión" (sondea `GET /cases/{id}` cada 5 s, solo con la pestaña visible).
-2. Pestaña de la consola: el caso aparece en la cola (sondeo cada 15 s o el botón de actualizar). Abrirlo: paquete (dicho frente a verificado), regla y versión de reglas, motivo previsto, reporte del investigador PROVISIONAL (stub determinista, sin modelo) con citas; cada cita abre su registro en la pestaña Evidencia. "Confirmar" el motivo previsto, "Aprobar y notificar" → "Confirmar y enviar". El panel pasa a "Respuesta enviada" con el sello.
+2. Pestaña de la consola: el caso aparece en la cola (sondeo cada 15 s o el botón de actualizar). Abrirlo: paquete (dicho frente a verificado), regla y versión de reglas, motivo previsto, reporte del investigador G2 con citas (sin credenciales de modelo lo arma la política determinista `policy-g2-v1` y la consola lo marca "sin modelo"); cada cita abre su registro en la pestaña Evidencia. "Confirmar" el motivo previsto, "Aprobar y notificar" → "Confirmar y enviar". El panel pasa a "Respuesta enviada" con el sello.
 3. Volver al chat: aparece el mensaje "Humano · aprobado por un analista" con el texto sellado ("… En esta demo ningún dinero se mueve.") y la tarjeta en "Notificado". Si Lucía escribe de nuevo, la respuesta no repite la resolución.
 4. João (PT): "Editar", cambiar el texto en portugués, escribir el motivo y `Ctrl+Enter`. Se ve la diferencia con el borrador antes de enviar.
 5. Martina: aparece en la cola como ruta C, prioridad alta, cola Fraude, con su traspaso (hechos verificados y preguntas abiertas), solo lectura.

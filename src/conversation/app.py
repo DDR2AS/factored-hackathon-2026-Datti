@@ -32,13 +32,14 @@ from typing import Any, Callable
 from pydantic import ValidationError
 
 from conversation import contract as C
-from conversation import demo_gateway, lane_rules
+from conversation import demo_gateway, lane_rules, models_port
 from conversation.analyst import AnalystService
 from conversation.lifecycle import CaseLifecycle, make_lifecycle
 from conversation.orchestrator import Orchestrator, SessionInfo, load_llm_client
 from conversation.sessions import SessionRecord, SessionService, iso, utc_now
 from conversation.store import CaseVersionConflict, Stores, make_stores
 from conversation.templates import format_duration, render
+from gateway import make_gateway
 
 NOT_AUTHORIZED = "not authorized"  # one message for "not yours" and "does not exist"
 MAX_SESSION_TRANSCRIPT = 60  # turns kept in the session (the case keeps up to 200)
@@ -80,6 +81,25 @@ class ChatApp:
             "synthetic": True,
         }
         return C.SessionResponse.model_validate(response).model_dump()
+
+    def create_eval_session(self, customer_id: str, language: str = "es", channel: str = "web") -> dict[str, Any]:
+        """INTERNAL (evaluation harness only, never routed by handlers/api.py): a session for a
+        customer of the dataset, looked up through the configured gateway. Traces are marked
+        ``source: "eval"`` so they stay out of prompts and training, like the demo ones."""
+        profile = self.orchestrator.gw.profile_for_customer_id(customer_id)
+        if profile is None:
+            raise C.ApiFailure("invalid_request", "unknown customer")
+        language = language if language in ("es", "pt") else profile.language
+        token, record = self.sessions.create("eval", customer_id, channel, language)
+        record.source = "eval"
+        record.conversation = self.orchestrator.new_state(profile, language)
+        text, lang, buttons = self.orchestrator.welcome(record.conversation)
+        welcome = {"turn": 0, "reply_text": text, "reply_language": lang, "reply_source": "template",
+                   "buttons": self._issue(record, buttons), "input_mode": "free_text"}
+        record.conversation["transcript"] = [self._turn_entry("system", text, lang, "template")]
+        self.sessions.save(record)
+        return {"session_token": token, "session_id": record.session_id, "welcome": welcome,
+                "customer": {"display_name": profile.display_name, "country": profile.country}}
 
     # ------------------------------------------------------------ POST /chat
 
@@ -381,10 +401,14 @@ def build_app(env: dict[str, str] | None = None, clock: Callable[[], datetime] |
     kwargs: dict[str, Any] = {} if sleep is None else {"sleep": sleep}
     if llm_timeout is not None:
         kwargs["llm_timeout"] = llm_timeout
-    orch = Orchestrator(stores.cases, stores.traces, llm=llm, clock=clock, **kwargs)
+    # Backends behind the interfaces (#2 gateway, #4 models), chosen by environment variables (#9);
+    # unset = the M1 stand-ins (demo gateway, v1.4 rule, keywords, stub investigator).
+    gateway = make_gateway(env)
+    orch = Orchestrator(stores.cases, stores.traces, gateway=gateway, llm=llm, clock=clock,
+                        ranker=models_port.make_ranker(env), classifier=models_port.make_classifier(env), **kwargs)
     lifecycle = make_lifecycle(env, stores, clock=clock, delay_seconds=investigation_delay, sla_scale=sla_scale,
-                               **({} if sleep is None else {"sleep": sleep}))
-    analyst = AnalystService(stores, lifecycle, clock=clock)
+                               gateway=gateway, **({} if sleep is None else {"sleep": sleep}))
+    analyst = AnalystService(stores, lifecycle, clock=clock, gateway=gateway)
     return ChatApp(sessions=sessions, orchestrator=orch, stores=stores, lifecycle=lifecycle, analyst=analyst)
 
 

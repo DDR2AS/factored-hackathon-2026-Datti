@@ -52,9 +52,9 @@ export function JudgeLanding() {
           <a className="later__item later__item--on" href={hrefFor({ name: 'trace', traceId: null })}>
             {t('nav.traces')}
           </a>
-          <span className="later__item" aria-disabled="true">
-            {t('nav.evaluation')} <span className="tag">{t('nav.soon', { date: t('avail.fri2') })}</span>
-          </span>
+          <a className="later__item later__item--on" href={hrefFor({ name: 'evaluation' })}>
+            {t('nav.evaluation')}
+          </a>
         </nav>
       </main>
       <Footer />

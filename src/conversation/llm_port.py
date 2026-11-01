@@ -1,4 +1,4 @@
-"""Port to the #8 LLM client (owner: arturo on this side; the package ``src/llm`` is Andrés's).
+"""Port to the #8 LLM client (owner: arturo on this side; the package is ``src/llm``).
 
 INTERFACES.md #8, exactly::
 
@@ -16,17 +16,19 @@ Provider selection by ``LLM_PROVIDER`` (#9):
   rendered prompt and of the output, cost with the per-role prices of ``llm_prices.yaml``;
   ``usage.estimated`` is True.
 - ``none`` (or unset): no model; the regex extractor answers every turn.
-- ``bedrock``: Andrés's package ``src/llm`` if it exists. Until it does, ``UnavailableLLMClient``
-  raises ``ModelUnavailable`` ("pendiente de Andrés") on every call and the orchestrator falls
-  back to the regex extractor with ``degraded: ["model_timeout"]``.
+- ``bedrock`` | ``anthropic``: the package ``src/llm`` (``PackageLLMClient``), which calls Claude
+  on Amazon Bedrock or on the Anthropic API. Its errors become the port's: ``TimeoutError`` ->
+  ``ModelTimeout``, ``llm.ProviderUnavailable`` (no credentials, no access, network) ->
+  ``ModelUnavailable``, ``llm.ModelError`` -> ``ModelError``. Without credentials every turn
+  falls back to the regex extractor with ``degraded: ["model_timeout"]``.
 
-No model ID is ever written in this repo: ``model_role`` maps to one in the cloud config
-(``MODEL_CHAT`` etc., set by the CDK).
+No model ID is ever written in this module: ``model_role`` maps to one in ``src/llm`` (from
+``MODEL_CHAT`` etc., set by the CDK, or the defaults of ``src/llm/models.yaml``).
 
 Prompts: #8 says ``prompts/<prompt_id>/<version>.md`` at the repo root, but the Lambda asset
 is only ``src/`` (``infra/stacks/common.py``), so a root ``prompts/`` folder would not be
-deployed. PROPOSAL to Andrés: prompts live in ``src/conversation/prompts/<prompt_id>/<version>.md``;
-``load_prompt`` looks there first and then in the root ``prompts/``.
+deployed. ``load_prompt`` looks in ``src/prompts/`` (G2/G3), then ``src/conversation/prompts/``
+(G1) and last in the root ``prompts/``; ``src/llm`` uses the same order.
 """
 
 from __future__ import annotations
@@ -45,14 +47,13 @@ from conversation.textnorm import fold
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SRC_DIR.parent
-PROMPT_DIRS = (Path(__file__).resolve().parent / "prompts", REPO_ROOT / "prompts")
+PROMPT_DIRS = (SRC_DIR / "prompts", Path(__file__).resolve().parent / "prompts", REPO_ROOT / "prompts")
 FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures" / "llm"
 PRICES_FILE = Path(__file__).resolve().parent / "llm_prices.yaml"
 MODEL_ROLES = ("chat", "investigator", "judge")
-PROVIDERS = ("mock", "none", "bedrock")
+PROVIDERS = ("mock", "none", "bedrock", "anthropic")  # bedrock and anthropic: the src/llm package
 MOCK_MODEL_ID = "mock-g1"
-PENDING_BEDROCK = ("LLM_PROVIDER=bedrock pero src/llm no existe: el cliente #8 está pendiente de "
-                   "Andrés; responde el extractor por reglas")
+MISSING_PACKAGE = "src/llm no existe; responde el extractor por reglas"
 
 # The customer's text goes to the model between these tags and is declared as DATA. Any copy
 # of the tags inside the text is removed first (``as_data``), so the text cannot close the
@@ -115,7 +116,8 @@ def _versions(prompt_id: str) -> list[tuple[int, Path]]:
 
 def load_prompt(prompt_id: str, version: str | None = None) -> tuple[str, str]:
     """(prompt_version, template text without the ``<!-- -->`` header). ``version`` "v1";
-    None = the highest version. Looks in ``src/conversation/prompts`` first, then ``prompts/``."""
+    None = the highest version. Looks in ``src/prompts``, ``src/conversation/prompts``, then
+    ``prompts/`` (``PROMPT_DIRS``)."""
     if not re.fullmatch(r"[a-z0-9_]+", prompt_id or ""):
         raise ValueError(f"invalid prompt_id {prompt_id!r}")
     found = _versions(prompt_id)
@@ -245,7 +247,7 @@ class MockLLMClient:
 
 
 class UnavailableLLMClient:
-    """Stands for a provider that cannot answer (``bedrock`` without ``src/llm``)."""
+    """Stands for a provider that cannot answer (``src/llm`` missing or not importable)."""
 
     def __init__(self, reason: str) -> None:
         self.reason = reason
@@ -256,17 +258,35 @@ class UnavailableLLMClient:
 
 
 class PackageLLMClient:
-    """Andrés's ``src/llm`` package behind the port (it already has the #8 signature)."""
+    """The ``src/llm`` package behind the port (it has the #8 signature). ``provider`` is the
+    ``LLM_PROVIDER`` this port selected; it is passed on so both sides use the same one.
+    Errors: ``TimeoutError`` -> ``ModelTimeout``, ``llm.NoFixture`` -> ``NoFixture``,
+    ``llm.ProviderUnavailable`` -> ``ModelUnavailable``, ``llm.ModelError`` -> ``ModelError``."""
 
-    def __init__(self, module: Any) -> None:
+    def __init__(self, module: Any, provider: str | None = None) -> None:
         self.module = module
+        self.provider = provider
+
+    def _error(self, name: str) -> Any:
+        """The package's exception class ``name``, or ``()`` (matches nothing) if it lacks it."""
+        cls = getattr(self.module, name, None)
+        return cls if isinstance(cls, type) and issubclass(cls, BaseException) else ()
 
     def complete(self, prompt_id: str, variables: dict, output_schema: dict | None = None,
                  model_role: str = "chat") -> dict:
+        kwargs: dict[str, Any] = {"output_schema": output_schema, "model_role": model_role}
+        if self.provider is not None:
+            kwargs["provider"] = self.provider
         try:
-            return self.module.complete(prompt_id, variables, output_schema=output_schema, model_role=model_role)
+            return self.module.complete(prompt_id, variables, **kwargs)
         except TimeoutError as e:
             raise ModelTimeout(str(e)) from e
+        except self._error("NoFixture") as e:  # before ModelError: it is a subclass there
+            raise NoFixture(str(e), prompt_version=getattr(e, "prompt_version", None)) from e
+        except self._error("ProviderUnavailable") as e:
+            raise ModelUnavailable(str(e), prompt_version=getattr(e, "prompt_version", None)) from e
+        except self._error("ModelError") as e:
+            raise ModelError(str(e), prompt_version=getattr(e, "prompt_version", None)) from e
 
 
 def _andres_package() -> Any | None:
@@ -291,8 +311,8 @@ def provider(env: dict[str, str] | None = None) -> str:
 
 
 def load_llm_client(env: dict[str, str] | None = None) -> LLMClient | None:
-    """The client for ``LLM_PROVIDER``: mock, None (``none`` or unset), or bedrock (Andrés's
-    package, or an always-unavailable client while it does not exist)."""
+    """The client for ``LLM_PROVIDER``: mock, None (``none`` or unset), or the ``src/llm``
+    package for bedrock and anthropic (an always-unavailable client if it cannot be imported)."""
     env = os.environ if env is None else env
     name = provider(env)
     if name == "none":
@@ -303,7 +323,15 @@ def load_llm_client(env: dict[str, str] | None = None) -> LLMClient | None:
         module = _andres_package()
     except Exception as e:  # a broken package is reported, never a crash at start
         return UnavailableLLMClient(f"src/llm no se pudo importar ({type(e).__name__}); responde el extractor por reglas")
-    return PackageLLMClient(module) if module is not None else UnavailableLLMClient(PENDING_BEDROCK)
+    if module is None:
+        return UnavailableLLMClient(f"LLM_PROVIDER={name} pero {MISSING_PACKAGE}")
+    warm_up = getattr(module, "warm_up", None)
+    if callable(warm_up):  # import the SDK now, not inside the first turn's LLM_TIMEOUT_SECONDS
+        try:
+            warm_up(name)
+        except Exception:  # best effort: the first call reports any real problem
+            pass
+    return PackageLLMClient(module, provider=name)
 
 
 def describe(env: dict[str, str] | None = None) -> str:
@@ -320,4 +348,10 @@ def describe(env: dict[str, str] | None = None) -> str:
     client = load_llm_client(env)
     if isinstance(client, UnavailableLLMClient):
         return f"G1: {client.reason}"
-    return f"G1: paquete src/llm (bedrock), MODEL_CHAT={shown}"
+    try:
+        model = client.module.model_id_for("chat", provider=name, env=env)
+    except Exception as e:  # shown only; a bad configuration also shows up on the first turn
+        model = f"sin definir ({type(e).__name__})"
+    source = "MODEL_CHAT" if env.get("MODEL_CHAT") else "default de src/llm/models.yaml"
+    return (f"G1: paquete src/llm, proveedor {name}, modelo chat {model} ({source}); sin credenciales o sin "
+            f"acceso, cada turno cae al extractor por reglas (model_timeout)")

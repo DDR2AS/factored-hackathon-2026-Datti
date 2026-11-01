@@ -1,0 +1,7 @@
+# Pipeline Lambda only (infra/stacks/pipeline_stack.py, installed with -c bundle=true; boto3 is in
+# the runtime). pipeline.run imports pandas through pipeline.quality. pyarrow is NOT here: only the
+# quality report needs it and it would push the package past Lambda's 250 MB, so the quality step
+# runs with `make pipeline` (locally or in CI), not in the Lambda.
+duckdb==2.0.0
+pandas==3.1.0
+PyYAML==6.0.3

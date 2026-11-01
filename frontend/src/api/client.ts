@@ -21,6 +21,7 @@ import type {
   DecisionRequest,
   DecisionResponse,
   ErrorCode,
+  EvaluationResponse,
   HealthResponse,
   SessionRequest,
   SessionResponse,
@@ -75,6 +76,8 @@ export interface ApiClient {
   getAnalystCase(caseId: string, control?: RequestControl): Promise<AnalystCaseDetail>
   /** Safe to retry with the same client_decision_id and body (the server returns the stored answer). */
   decide(caseId: string, req: DecisionRequest, control?: RequestControl): Promise<DecisionResponse>
+  /** Public, no token: the latest evaluation report (available: false until `make eval` ran). */
+  getEvaluation(control?: RequestControl): Promise<EvaluationResponse>
 }
 
 /** Query string for GET /analyst/cases; only the keys that are set, in a fixed order. */
@@ -412,6 +415,14 @@ export function createApiClient(deps: ApiClientDeps = {}): ApiClient {
         path: `/analyst/cases/${encodeURIComponent(caseId)}/decision`,
         body: req,
         auth: 'analyst',
+        signal: control?.signal,
+        noRetry: control?.noRetry,
+      }),
+    getEvaluation: (control) =>
+      request<EvaluationResponse>({
+        method: 'GET',
+        path: '/evaluation',
+        auth: false,
         signal: control?.signal,
         noRetry: control?.noRetry,
       }),

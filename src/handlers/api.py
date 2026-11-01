@@ -6,6 +6,9 @@ Owner: arturo. Thin router by ``routeKey``; the logic lives in ``conversation.ap
 - ``GET /health`` works even if pydantic/PyYAML are missing from the bundle: the
   conversation package is imported lazily, only by the routes that use it, and /health
   reports ``deps: "ok" | "missing"``.
+- ``GET /evaluation``: public, no auth. The latest ``make eval`` report without its rows
+  (``conversation.evaluation``); ``{"available": false, "report": null}`` with 200 while there
+  is none. It does not build the app (no stores, no sessions).
 - ``POST /session``, ``POST /chat``, ``GET /cases/{case_id}``: customer routes with the app's
   own session token, sent as ``Authorization: Bearer <token>`` or, as plan B when
   CloudFront drops Authorization on GET, as ``x-ev-session: <token>``.
@@ -145,6 +148,20 @@ def _source_ip(event: dict) -> str | None:
     return str(ip) if ip else None
 
 
+def _evaluation() -> dict:
+    """GET /evaluation (public). Reading the report never raises; missing deps are a 500."""
+    try:
+        from conversation.evaluation import evaluation_response
+    except ImportError:
+        logger.error("dependencies missing for GET /evaluation")
+        return _error(500, "internal", "server dependencies missing (pydantic, PyYAML)", False)
+    try:
+        return _response(200, evaluation_response())
+    except Exception as e:  # never leak details
+        logger.error("unhandled %s on GET /evaluation", type(e).__name__)
+        return _error(500, "internal", "internal error", True)
+
+
 def handler(event, context):
     if event.get("warmup"):
         return {"warm": True}
@@ -153,6 +170,8 @@ def handler(event, context):
     if route == "GET /health":
         return _response(200, {"status": "ok", "stage": os.environ.get("STAGE"), "deps": deps_status(),
                                "demo_clock_scale": demo_clock_scale()})
+    if route == "GET /evaluation":
+        return _evaluation()
     if route not in ANALYST_ROUTES and route not in ("POST /session", "POST /chat", "GET /cases/{case_id}"):
         return _response(404, {"message": "Not Found"})
 

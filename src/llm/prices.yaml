@@ -1,0 +1,22 @@
+# ESTIMACIÓN, no factura. Precios de lista de la API de Anthropic en USD por millón de tokens
+# (tabla de modelos del 2026-10-06). Bedrock factura aparte con su propia lista (los endpoints
+# regionales llevan +10 %): con LLM_PROVIDER=bedrock el costo sale con usage.estimated = true.
+# Caché (TTL de 5 minutos): lectura ~0,1x del input (Opus 5.5: 0,20 USD, 0,05x), escritura
+# 1,25x del input. Haiku 5.5: precio para prompts de hasta 100K tokens (0,50/2,50 por encima).
+# Clave: model ID sin el prefijo "anthropic." de Bedrock. Un modelo que no está aquí cuesta 0
+# y su usage sale con estimated = true.
+version: "2026-10-29.1"
+estimate: true
+models:
+  claude-haiku-4-5:
+    {input_usd_per_mtok: 1.00, output_usd_per_mtok: 5.00, cache_read_usd_per_mtok: 0.10, cache_write_usd_per_mtok: 1.25}
+  claude-sonnet-5:
+    {input_usd_per_mtok: 2.00, output_usd_per_mtok: 10.00, cache_read_usd_per_mtok: 0.20, cache_write_usd_per_mtok: 2.50}
+  claude-opus-5:
+    {input_usd_per_mtok: 5.00, output_usd_per_mtok: 25.00, cache_read_usd_per_mtok: 0.50, cache_write_usd_per_mtok: 6.25}
+  claude-haiku-5-5:
+    {input_usd_per_mtok: 0.10, output_usd_per_mtok: 0.50, cache_read_usd_per_mtok: 0.01, cache_write_usd_per_mtok: 0.125}
+  claude-sonnet-5-5:
+    {input_usd_per_mtok: 2.00, output_usd_per_mtok: 10.00, cache_read_usd_per_mtok: 0.20, cache_write_usd_per_mtok: 2.50}
+  claude-opus-5-5:
+    {input_usd_per_mtok: 4.00, output_usd_per_mtok: 20.00, cache_read_usd_per_mtok: 0.20, cache_write_usd_per_mtok: 5.00}

@@ -7,6 +7,8 @@ import type {
   CustomerCaseView,
   DecisionRequest,
   DecisionResponse,
+  EvaluationReport,
+  EvaluationResponse,
   InvestigatorReport,
   SessionResponse,
 } from '../src/api/types'
@@ -285,4 +287,218 @@ export function decisionResponse(req: DecisionRequest, overrides: Partial<Decisi
     labels_emitted: [`decision:${req.action}`],
     ...overrides,
   }
+}
+
+// ---------- Evaluation report (GET /evaluation), SYNTHETIC, shaped like src/eval/report.py ----------
+
+const rate = (value: number, n: number, k: number, lo: number, hi: number) => ({ value, n, k, ci95: [lo, hi] })
+
+export function evaluationReport(overrides: Partial<EvaluationReport> = {}): EvaluationReport {
+  return {
+    version: 'eval-2026-10-29.1',
+    generated_at: '2026-10-30T04:37:02Z',
+    data_source: 'synthetic_replica',
+    synthetic: true,
+    gold_snapshot: '2026-06-17',
+    seconds: 34.6,
+    scenarios: {
+      n: 240,
+      adversarial: 36,
+      by_kind: { fee_matches: 12, injection: 24 },
+      by_language: { es: 115, pt: 125 },
+      by_country: { AR: 54, CO: 79, MX: 107 },
+      seed: 20261029,
+    },
+    configs: [
+      { id: 'v2', label: 'v2: M1 + M2 + G1 + G2', env: { M1_BACKEND: 'model' } },
+      { id: 'b1_rules_v14', label: 'B1: v1.4 solo reglas (sin investigador)', env: { M1_BACKEND: 'rule' } },
+    ],
+    headline: [
+      {
+        metric: 'safe_automated_resolution',
+        label: 'Resolución automática segura',
+        unit: 'ratio',
+        target: '>= 30% con 0 cierres incorrectos',
+        v2: rate(0.4158, 190, 79, 0.3474, 0.4789),
+        b1: rate(0.4053, 190, 77, 0.3367, 0.4684),
+        pass: true,
+      },
+      {
+        metric: 'unnecessary_handoffs',
+        label: 'Derivaciones innecesarias',
+        unit: 'ratio',
+        target: '<= 10%',
+        v2: rate(0.12, 190, 23, 0.08, 0.17),
+        b1: rate(0.0105, 190, 2, 0, 0.0263),
+        pass: false,
+      },
+      {
+        metric: 'containment',
+        label: 'Contención (cerrado sin humano)',
+        unit: 'ratio',
+        target: 'comparado con B1',
+        v2: rate(0.4158, 190, 79, 0.3474, 0.4789),
+        b1: null,
+        pass: null,
+      },
+      {
+        metric: 'investigator_unsupported_claims',
+        label: 'Investigador: reportes con afirmaciones sin respaldo quitadas',
+        unit: 'ratio',
+        target: '—',
+        v2: rate(0.0317, 63, 2, 0, 0.0794),
+        b1: rate(0, 63, 0, 0, 0),
+        pass: null,
+      },
+      {
+        metric: 'brand_new_metric',
+        label: 'Métrica nueva del generador',
+        unit: 'ratio',
+        target: '—',
+        v2: { value: null, n: null, k: null, ci95: null },
+        b1: null,
+        pass: null,
+      },
+    ],
+    latency: {
+      turn_p50_ms: 17.4,
+      turn_p95_ms: 72.4,
+      turns: 639,
+      investigator_p50_ms: 56,
+      investigator_p95_ms: 77.9,
+      investigations: 63,
+      target: 'turno p95 < 6 s; investigador p95 < 90 s',
+      note: 'medido en local, proceso único, sin red ni modelo real (G1 mock, G2 política determinista)',
+    },
+    cost: {
+      per_conversation_usd: 0,
+      target: '< 0.05 USD por conversación',
+      note: 'medido con el proveedor mock: no hay llamadas reales',
+      projected: {
+        chat_model: 'claude-chat-synthetic',
+        investigator_model: 'claude-investigator-synthetic',
+        chat_per_conversation_usd: 0.0041,
+        investigator_per_case_usd: 0.0312,
+        share_of_conversations_investigated: 0.263,
+        total_per_conversation_usd: 0.0123,
+        note: 'PROYECCIÓN con precios de lista y tamaños de prompt medidos; sin prompt caching (cota alta)',
+      },
+    },
+    fairness: {
+      by_language: {
+        es: {
+          n: 115,
+          lane_accuracy: 1,
+          charge_accuracy: 1,
+          safe_automated_resolution: 0.4583,
+          auto_resolution_when_expected: 0.9483,
+          expected_a: 58,
+          unsafe_wrong_charge_filed: 0,
+        },
+        pt: {
+          n: 125,
+          lane_accuracy: 1,
+          charge_accuracy: null,
+          safe_automated_resolution: 0.3723,
+          auto_resolution_when_expected: 0.9348,
+          expected_a: 46,
+          unsafe_wrong_charge_filed: 0,
+        },
+      },
+      by_country: {
+        AR: {
+          n: 54,
+          lane_accuracy: 1,
+          charge_accuracy: 1,
+          safe_automated_resolution: 0.5333,
+          auto_resolution_when_expected: null,
+          expected_a: null,
+          unsafe_wrong_charge_filed: 0,
+        },
+        MX: {
+          n: 107,
+          lane_accuracy: 1,
+          charge_accuracy: 1,
+          safe_automated_resolution: 0.3864,
+          auto_resolution_when_expected: 0.94,
+          expected_a: 50,
+          unsafe_wrong_charge_filed: 0,
+        },
+      },
+      target: 'brechas <= 5 puntos o explicadas',
+      gaps: [
+        {
+          dimension: 'idioma',
+          metric: 'resolución automática segura',
+          gap_points: 8.6,
+          max: 'es',
+          min: 'pt',
+          within_limit: false,
+          explanation: 'mezcla de escenarios: la parte de casos que deben resolverse en ruta A cambia por grupo',
+        },
+        { dimension: 'idioma', metric: 'ruta correcta', gap_points: 0, max: 'es', min: 'pt', within_limit: true, explanation: null },
+        { dimension: 'país', metric: 'métrica futura', gap_points: 3.2, max: 'MX', min: 'CO', within_limit: true, explanation: null },
+      ],
+    },
+    by_kind: { v2: { fee_matches: { n: 12, expected_lane: 'A', lanes: { A: 12 } } } },
+    security: {
+      v2: {
+        tool_scope: { n: 204, leaks: 0 },
+        expired_session: { n: 3, data_shown: 0 },
+        other_session_case: { n: 1, leaks: 0 },
+        tool_failure: { lane: 'C', degraded: ['tool_unavailable'], safe: true },
+      },
+      b1: {
+        tool_scope: { n: 204, leaks: 2 },
+        expired_session: { n: 0, data_shown: 0 },
+        other_session_case: null,
+        tool_failure: { lane: 'A', degraded: [], safe: false },
+      },
+    },
+    models: {
+      m1: {
+        model_version: 'm1-lgbm-1',
+        primary: 'model',
+        thresholds: { confirm_threshold: 0.95, choose_threshold: 0.15 },
+        queries_test: 8000,
+        m1: {
+          top1: 0.7552,
+          top1_ci95: [0.7453, 0.7654],
+          recall_at_3: 0.9709,
+          wrong_confirmation_rate: 0.0035,
+          wrong_confirmation_ci95: [0.0022, 0.0049],
+          confirm_rate: 0.2389,
+          no_match_detection: 0.9663,
+        },
+        rule: { top1: 0.7109, recall_at_3: 0.9577, wrong_confirmation_rate: 0.0288, confirm_rate: 0.3563, no_match_detection: 0.7976 },
+      },
+      m2: null,
+      m3: {
+        model_version: 'm3-evidence-1',
+        lift_significant: false,
+        decision: 'evidence_only',
+        test: { pr_auc_model: 0.0023, pr_auc_fraud_score: 0.00268 },
+        pr_auc_diff_ci95: [-0.00515, 0.00238],
+      },
+      g1: { status: 'mock', note: 'LLM_PROVIDER=mock: fixtures solo para los mensajes del modo juez.' },
+      g2: { status: 'policy', note: 'Sin credenciales de modelo, el investigador corre con la política determinista.' },
+      g3: { status: 'not_run', note: 'El juez offline necesita un modelo.' },
+      b2_zero_shot: { status: 'not_run', note: 'Requiere un modelo (LLM_PROVIDER=anthropic|bedrock).' },
+    },
+    baseline_b0: [
+      { metric: 'median_resolution_days', value: 15, unit: 'days', n: 431, source: 'complaints', description: 'Mediana de días hasta resolver un reclamo' },
+      { metric: 'fraud_rule_precision', value: 1, unit: 'ratio', n: 260, source: 'transactions', description: 'Precisión de la regla fraud_score > 30' },
+      { metric: 'complaint_contact_csat', value: 2.4288, unit: 'score_1_5', n: 534, source: 'satisfaction_surveys', description: 'CSAT medio de los contactos por queja' },
+    ],
+    limits: [
+      'Datos: réplica sintética del dataset (los organizadores no dieron acceso en esta máquina).',
+      'El portugués es generado, sin revisión nativa.',
+    ],
+    row_counts: { v2: 240, b1: 240 },
+    ...overrides,
+  }
+}
+
+export function evaluationResponse(report: EvaluationReport | null = evaluationReport()): EvaluationResponse {
+  return { available: report !== null, report, synthetic: true }
 }

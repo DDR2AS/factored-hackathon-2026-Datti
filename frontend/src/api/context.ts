@@ -46,6 +46,7 @@ export const defaultApiClient: ApiClient = {
   listAnalystCases: (query, control) => client().then((c) => c.listAnalystCases(query, control)),
   getAnalystCase: (caseId, control) => client().then((c) => c.getAnalystCase(caseId, control)),
   decide: (caseId, req, control) => client().then((c) => c.decide(caseId, req, control)),
+  getEvaluation: (control) => client().then((c) => c.getEvaluation(control)),
 }
 
 export const ApiContext = createContext<ApiClient>(defaultApiClient)

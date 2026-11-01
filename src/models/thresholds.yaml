@@ -1,0 +1,41 @@
+# Thresholds of M1, M2 and M3 (INTERFACES.md #4). Written by each model's training script
+# (make train); chosen on validation data, never by hand. Each writer replaces only its own key.
+m1:
+  model_version: m1-lgbm-1
+  primary: model
+  confirm_threshold: 0.95
+  choose_threshold: 0.15
+  chosen_on: 'validation (2025-12-01..2026-02-28): wrong confirmations <= 0.9% of
+    all queries and <= 5% of confirmed'
+  data_source: synthetic_replica
+m3:
+  model_version: m3-evidence-1
+  lift_significant: false
+  decision: evidence_only
+  alert_budget: 0.005
+  data_source: synthetic_replica
+  note: evidence only unless lift_significant; the lane rules keep fraud_score > 30
+m2:
+  model_version: m2-hashlr-1
+  accept_threshold: 0.9
+  ask_threshold: 0.45
+  rule: p = calibrated top-1 probability rounded to 3 decimals; accept if p >= accept_threshold;
+    ask if ask_threshold <= p < accept_threshold; human below ask_threshold
+  chosen_on: 'cross-fitted validation (synthetic, n=1744): model trained on generator
+    A scores generator B''s held-out phrasings and vice versa'
+  accept_criterion: smallest threshold with wrong routing among accepted <= 2% (also
+    at every higher threshold accepting >= 30 messages)
+  ask_criterion: walking down from accept_threshold in windows 0.05 wide (>= 20 messages),
+    keep asking while the true intent is among the top two options for >= 80% of the
+    window; the first window below that starts the human band
+  temperature: 1.013921
+  validation:
+    n: 1744
+    accept_rate: 0.7007
+    ask_rate: 0.2672
+    human_rate: 0.0321
+    wrong_routing_accepted: 0.0196
+    wrong_routing_accepted_ci95:
+    - 0.0132
+    - 0.0291
+    top2_coverage_ask: 0.9013

@@ -6,3 +6,8 @@
 # Chat API (src/conversation, arturo): contract models and YAML rules/templates.
 pydantic==2.13.5
 PyYAML==6.0.3
+# src/llm (G1 chat, G2 investigator): boto3 is already in the runtime and signs the Bedrock calls.
+anthropic==2.3.0
+# Pipeline Lambda (src/pipeline): DuckDB over one partition.
+duckdb==2.0.0
+# M1, M2 and M3 run in pure Python at serving time (no numpy/lightgbm needed in the chat Lambda).

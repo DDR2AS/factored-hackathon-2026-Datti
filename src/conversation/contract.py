@@ -12,9 +12,12 @@ does not match the contract is a bug caught as ``internal`` instead of a silent 
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+import functools
+import logging
+import math
+from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 Language = Literal["es", "pt"]
 Lane = Literal["A", "B", "C"]
@@ -631,6 +634,254 @@ class DecisionResponse(_Strict):
     status: CaseStatus
     analyst_decision: AnalystDecisionView
     labels_emitted: list[str]
+
+
+# ================================================================ GET /evaluation
+# Public, no auth (judges open it cold). The latest report of ``make eval`` (src/eval/report.py)
+# without the per-scenario rows, read and cached by conversation.evaluation. The report is
+# written by the eval harness, not by this server, so its pieces are lenient (_Lenient): the
+# route never fails because of one odd value, and the page shows "—" for a null.
+
+_EVAL_LOG = logging.getLogger("conversation.evaluation")
+
+
+def _eval_text(v: Any) -> Any:
+    """A number where text is expected (a target written as 0) becomes text; a boolean does not."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return str(v)
+    return v
+
+
+def _eval_number(v: Any) -> Any:
+    """Booleans, NaN and infinities are not numbers here (pydantic would read True as 1)."""
+    if isinstance(v, bool) or (isinstance(v, float) and not math.isfinite(v)):
+        raise ValueError("not a finite number")
+    return v
+
+
+EvalText = Annotated[str, BeforeValidator(_eval_text)]
+EvalNumber = Annotated[float, BeforeValidator(_eval_number)]
+EvalCount = Annotated[int, BeforeValidator(_eval_number)]
+
+
+@functools.lru_cache(maxsize=None)
+def _eval_adapter(annotation: Any) -> TypeAdapter:
+    return TypeAdapter(annotation)
+
+
+class _Lenient(BaseModel):
+    """A piece of the evaluation report. Unknown keys are dropped; a missing key, or a value that
+    is not of the declared type, reads as None (logged, without the value), so an older or newer
+    report still renders. Every field is Optional and has no default (the contract's rule for
+    responses): the missing ones are filled here, field by field."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _null_when_missing_or_mistyped(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data  # not an object: the parent's field becomes None
+        out: dict[str, Any] = {}
+        for name, field in cls.model_fields.items():
+            key = field.alias or name
+            value = data.get(key)
+            if value is not None:
+                try:
+                    value = _eval_adapter(field.annotation).validate_python(value)
+                except ValidationError:
+                    _EVAL_LOG.warning("evaluation report: %s.%s has an unexpected shape; served as null",
+                                      cls.__name__, key)
+                    value = None
+            out[key] = value
+        return out
+
+
+class EvaluationScenarios(_Lenient):
+    n: Optional[EvalCount]
+    adversarial: Optional[EvalCount]
+    by_kind: Optional[dict[str, EvalCount]]
+    by_language: Optional[dict[str, EvalCount]]
+    by_country: Optional[dict[str, EvalCount]]
+    seed: Optional[EvalCount]
+
+
+class EvaluationConfig(_Lenient):
+    id: Optional[EvalText]
+    label: Optional[EvalText]
+    env: Optional[dict[str, Any]]
+
+
+class EvaluationMetric(_Lenient):
+    """A rate over n cases: value = k / n; ci95 = bootstrap 95 % interval [low, high]."""
+
+    value: Optional[EvalNumber]
+    n: Optional[EvalCount]
+    k: Optional[EvalCount]
+    ci95: Optional[list[EvalNumber]]
+
+
+class EvaluationHeadline(_Lenient):
+    """``pass`` is a Python keyword: the field is ``pass_`` with alias ``pass`` (dump by_alias)."""
+
+    metric: Optional[EvalText]
+    label: Optional[EvalText]
+    unit: Optional[EvalText]
+    target: Optional[EvalText]
+    v2: Optional[EvaluationMetric]
+    b1: Optional[EvaluationMetric]
+    pass_: Optional[bool] = Field(alias="pass")
+
+
+class EvaluationLatency(_Lenient):
+    turn_p50_ms: Optional[EvalNumber]
+    turn_p95_ms: Optional[EvalNumber]
+    turns: Optional[EvalCount]
+    investigator_p50_ms: Optional[EvalNumber]
+    investigator_p95_ms: Optional[EvalNumber]
+    investigations: Optional[EvalCount]
+    target: Optional[EvalText]
+    note: Optional[EvalText]
+
+
+class EvaluationCostProjection(_Lenient):
+    """With real models at list prices: a projection, not a bill."""
+
+    chat_model: Optional[EvalText]
+    investigator_model: Optional[EvalText]
+    chat_per_conversation_usd: Optional[EvalNumber]
+    investigator_per_case_usd: Optional[EvalNumber]
+    share_of_conversations_investigated: Optional[EvalNumber]
+    total_per_conversation_usd: Optional[EvalNumber]
+    note: Optional[EvalText]
+
+
+class EvaluationCost(_Lenient):
+    per_conversation_usd: Optional[EvalNumber]
+    target: Optional[EvalText]
+    note: Optional[EvalText]
+    projected: Optional[EvaluationCostProjection]
+
+
+class EvaluationGroup(_Lenient):
+    n: Optional[EvalCount]
+    lane_accuracy: Optional[EvalNumber]
+    charge_accuracy: Optional[EvalNumber]
+    safe_automated_resolution: Optional[EvalNumber]
+    auto_resolution_when_expected: Optional[EvalNumber]
+    expected_a: Optional[EvalCount]
+    unsafe_wrong_charge_filed: Optional[EvalNumber]
+
+
+class EvaluationGap(_Lenient):
+    """Spread (max - min, in points) of one metric across the groups of one dimension."""
+
+    dimension: Optional[EvalText]
+    metric: Optional[EvalText]
+    gap_points: Optional[EvalNumber]
+    max: Optional[EvalText]
+    min: Optional[EvalText]
+    within_limit: Optional[bool]
+    explanation: Optional[EvalText]
+
+
+class EvaluationFairness(_Lenient):
+    by_language: Optional[dict[str, EvaluationGroup]]
+    by_country: Optional[dict[str, EvaluationGroup]]
+    target: Optional[EvalText]
+    gaps: Optional[list[EvaluationGap]]
+
+
+class EvaluationLeakProbe(_Lenient):
+    n: Optional[EvalCount]
+    leaks: Optional[EvalCount]
+
+
+class EvaluationExpiredProbe(_Lenient):
+    n: Optional[EvalCount]
+    data_shown: Optional[EvalCount]
+
+
+class EvaluationToolFailureProbe(_Lenient):
+    lane: Optional[EvalText]
+    degraded: Optional[list[EvalText]]
+    safe: Optional[bool]
+
+
+class EvaluationProbes(_Lenient):
+    tool_scope: Optional[EvaluationLeakProbe]
+    expired_session: Optional[EvaluationExpiredProbe]
+    other_session_case: Optional[EvaluationLeakProbe]
+    tool_failure: Optional[EvaluationToolFailureProbe]
+
+
+class EvaluationSecurity(_Lenient):
+    v2: Optional[EvaluationProbes]
+    b1: Optional[EvaluationProbes]
+
+
+class EvaluationComponentStatus(_Lenient):
+    status: Optional[EvalText]
+    note: Optional[EvalText]
+
+
+class EvaluationModels(_Lenient):
+    """m1, m2 and m3: the model reports' summaries as the report writes them (loose; M2 may be
+    None while it trains)."""
+
+    m1: Optional[dict[str, Any]]
+    m2: Optional[dict[str, Any]]
+    m3: Optional[dict[str, Any]]
+    g1: Optional[EvaluationComponentStatus]
+    g2: Optional[EvaluationComponentStatus]
+    g3: Optional[EvaluationComponentStatus]
+    b2_zero_shot: Optional[EvaluationComponentStatus]
+
+
+class EvaluationBaseline(_Lenient):
+    metric: Optional[EvalText]
+    value: Optional[EvalNumber]
+    unit: Optional[EvalText]
+    n: Optional[EvalCount]
+    source: Optional[EvalText]
+    description: Optional[EvalText]
+
+
+class EvaluationReport(_Lenient):
+    """The report minus ``rows``; ``row_counts`` says how many rows each configuration had."""
+
+    version: Optional[EvalText]
+    generated_at: Optional[EvalText]
+    data_source: Optional[EvalText]
+    synthetic: Optional[bool]
+    gold_snapshot: Optional[EvalText]
+    seconds: Optional[EvalNumber]
+    scenarios: Optional[EvaluationScenarios]
+    configs: Optional[list[EvaluationConfig]]
+    headline: Optional[list[EvaluationHeadline]]
+    latency: Optional[EvaluationLatency]
+    cost: Optional[EvaluationCost]
+    fairness: Optional[EvaluationFairness]
+    by_kind: Optional[dict[str, Any]]
+    security: Optional[EvaluationSecurity]
+    models: Optional[EvaluationModels]
+    baseline_b0: Optional[list[EvaluationBaseline]]
+    limits: Optional[list[EvalText]]
+    row_counts: Optional[dict[str, EvalCount]]
+
+
+class EvaluationResponse(_Strict):
+    """Dump with ``model_dump(mode="json", by_alias=True)`` (``pass``)."""
+
+    available: bool
+    report: Optional[EvaluationReport]
+    synthetic: Literal[True]
+
+    @model_validator(mode="after")
+    def _report_iff_available(self) -> "EvaluationResponse":
+        if self.available != (self.report is not None):
+            raise ValueError("report is set exactly when available is true")
+        return self
 
 
 # ---------------------------------------------------------------- errors

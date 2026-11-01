@@ -4,8 +4,9 @@ understand -> find -> verify -> decide -> case_open | done
 (docs/interfaz_chat_requerimientos.md sections 3.2, 4 and 7).
 
 Hard rules this module keeps:
-- The lane is decided ONLY by ``lane_rules.evaluate`` (rules/lane_rules.yaml). Models and
-  keyword stand-ins (classifier, extractor, ranker) only produce evidence.
+- The lane is decided ONLY by ``lane_rules.evaluate`` (rules/lane_rules.yaml). Models (M2
+  classifier, G1 extractor, M1 ranker, M3 risk evidence) and their rule stand-ins only produce
+  evidence; ``conversation.models_port`` picks model or rule by ``M1_BACKEND``/``M2_BACKEND``.
 - Nothing moves money. No reply promises a refund or compensation (templates are checked
   by tests; there is no free generation here).
 - A card is blocked only from the server-issued "yes" button, and the reply reports the
@@ -15,7 +16,7 @@ Hard rules this module keeps:
 - Tools go through ``_tool``: 2 retries with backoff, then ``tool_failure`` -> lane C with
   the case marked incomplete and ``degraded: ["tool_unavailable"]``.
 - The LLM extractor (G1, #8 ``complete()`` through ``conversation.llm_port``; details in
-  ``conversation.g1``) is optional: ``LLM_PROVIDER`` mock | none | bedrock. Its output is
+  ``conversation.g1``) is optional: ``LLM_PROVIDER`` mock | none | anthropic | bedrock. Its output is
   validated with the schema and guarded against hallucination; the lane C flags of the model
   are OR-ed with the pattern lists. On timeout (``LLM_TIMEOUT_SECONDS``) or an unavailable
   provider the regex extractor answers with ``degraded: ["model_timeout"]``; without a mock
@@ -225,10 +226,14 @@ class Orchestrator:
     def __init__(self, cases: CaseStore, traces: TraceSink, gateway: Any = default_gateway,
                  llm: LlmClient | None = None, clock: Callable[[], datetime] | None = None,
                  sleep: Callable[[float], None] = time.sleep, retries: int = 2,
-                 backoff: tuple[float, ...] = (0.2, 0.6), llm_timeout: float | None = None) -> None:
+                 backoff: tuple[float, ...] = (0.2, 0.6), llm_timeout: float | None = None,
+                 ranker: Any = None, classifier: Any = None) -> None:
         self.cases = cases
         self.traces = traces
         self.gw = gateway
+        # M1 and M2 (#4) behind conversation.models_port; the v1.4 stand-ins by default.
+        self.ranker = ranker if ranker is not None else ranker_mod
+        self.classifier = classifier if classifier is not None else classifier_mod
         self.llm = llm
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.sleep = sleep
@@ -305,8 +310,8 @@ class Orchestrator:
             st.language = lang  # the reply follows the message (RF-27); the switch is in the trace
         clean = self._step(t, "rule", "redact", None, lambda: redact(text, st.language))
         t.customer_text = clean
-        intent = self._step(t, "model", "classify", classifier_mod.MODEL_VERSION,
-                            lambda: classifier_mod.classify(clean, st.language),
+        intent = self._step(t, "model", "classify", self.classifier.MODEL_VERSION,
+                            lambda: self.classifier.classify(clean, st.language),
                             out=lambda r: f"intent:{r['intent_class']}:{r['p']}")
         if intent["intent_class"] == "manipulation":
             # Template only: nothing merged, no tool, no case, no buttons.
@@ -332,7 +337,7 @@ class Orchestrator:
                     return
         st.intent = intent
         ext = self._extract(st, t, clean)
-        no_keywords = not any(classifier_mod.scores(clean).values())
+        no_keywords = not any(self.classifier.scores(clean).values())
         has_slots = any(getattr(ext.slots, s) for s in SEARCH_SLOTS)
         if ("model_timeout" in t.degraded and st.case_id is None and no_keywords and not has_slots
                 and not ext.complaint_type and not any(ext.flags.model_dump().values())):
@@ -773,8 +778,8 @@ class Orchestrator:
         if not cands:
             st.phase = "not_found"
             return
-        ranked = self._step(t, "model", "rank_candidates", ranker_mod.MODEL_VERSION,
-                            lambda: ranker_mod.rank_candidates(slots, cands),
+        ranked = self._step(t, "model", "rank_candidates", self.ranker.MODEL_VERSION,
+                            lambda: self.ranker.rank_candidates(slots, cands),
                             out=lambda r: f"band:{r['band']}:top:{r['ranked'][0]['txn_id']}:{r['ranked'][0]['p']}")
         by_id = {c.txn_id: c for c in cands}
         probs = {r["txn_id"]: r["p"] for r in ranked["ranked"]}
@@ -784,7 +789,7 @@ class Orchestrator:
                           inp=f"txn:{top_id}", out=lambda r: "txns:" + ",".join(x.txn_id for x in r))
         group = [top_id] + [d.txn_id for d in dups if d.txn_id in by_id]
         p_group = sum(probs.get(x, 0.0) for x in group)
-        band = ranker_mod.band_for(p_group) if len(group) > 1 else ranked["band"]
+        band = self.ranker.band_for(p_group) if len(group) > 1 else ranked["band"]
         st.match = {"candidates": ranked["ranked"][:10], "band": band, "p_top1": round(p_group, 4),
                     "model_version": ranked["model_version"], "chosen_id": None}
         choices: list[str] = []
@@ -901,10 +906,10 @@ class Orchestrator:
         (a single charge left in the "choose" band), and says so when the merchant named by the
         customer shares nothing with the charge's."""
         match = st.match or {}
-        if match.get("band") == "confirm" or (match.get("p_top1") or 0) >= ranker_mod.CONFIRM_THRESHOLD:
+        if match.get("band") == "confirm" or (match.get("p_top1") or 0) >= self.ranker.CONFIRM_THRESHOLD:
             return "confirm_charge"
         said = st.claimed.get("merchant_text")
-        if said and ranker_mod.merchant_similarity(said, txn.get("merchant_name") or "") == 0:
+        if said and self.ranker.merchant_similarity(said, txn.get("merchant_name") or "") == 0:
             return "confirm_charge_other_merchant"
         return "confirm_charge_uncertain"
 

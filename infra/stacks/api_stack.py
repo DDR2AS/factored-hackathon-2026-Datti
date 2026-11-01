@@ -22,9 +22,11 @@ from .config import StageConfig
 from .data_stack import DataStack
 from .workflow_stack import WorkflowStack
 
-# Public routes: the handler checks the app session token itself.
+# Public routes: the handler checks the app session token itself (/health and /evaluation need
+# none: /evaluation serves the latest eval report from the artifacts bucket, eval/report_latest.yaml).
 PUBLIC_ROUTES = [
     ("/health", apigwv2.HttpMethod.GET),
+    ("/evaluation", apigwv2.HttpMethod.GET),
     ("/session", apigwv2.HttpMethod.POST),
     ("/chat", apigwv2.HttpMethod.POST),
     ("/cases/{case_id}", apigwv2.HttpMethod.GET),

@@ -45,6 +45,7 @@ class MonitoringStack(cdk.Stack):
             "ApiErrors": api.function.metric_errors(period=five_minutes),
             "Api5xx": api.http_api.metric_server_error(period=five_minutes),
             "InvestigatorErrors": workflow.investigator.metric_errors(period=five_minutes),
+            "CaseStepsErrors": workflow.case_steps.metric_errors(period=five_minutes),
             "CaseExecutionsFailed": workflow.state_machine.metric_failed(period=five_minutes),
             "PipelineExecutionsFailed": pipeline.state_machine.metric_failed(period=five_minutes),
         }

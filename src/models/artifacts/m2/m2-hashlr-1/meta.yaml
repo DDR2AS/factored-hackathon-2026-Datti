@@ -1,0 +1,119 @@
+# M2 artifact metadata, written by `python -m models.m2.train`; do not edit by hand.
+# Trained ONLY on synthetic messages (models/m2/textgen.py). Report: docs/modelos/m2.md
+model_version: m2-hashlr-1
+created_by: python -m models.m2.train
+synthetic_training_data: true
+classes:
+- dispute_charge
+- dispute_fee
+- complaint_other
+- case_status
+- account_query
+- lost_card
+- human_request
+- out_of_scope
+- manipulation
+features:
+  version: m2-hash-v1
+  n_buckets: 32768
+  char_ngrams:
+  - 2
+  - 5
+  word_ngrams:
+  - 1
+  - 2
+  hash: zlib.crc32 of the UTF-8 feature string; low 15 bits = bucket, top bit = sign
+  concepts:
+  - fee
+  - charge
+  - unrecognized
+  - duplicate
+  - overcharge
+  - refund_missing
+  - atm
+  - card
+  - loss
+  - block
+  - forgot
+  - human
+  - talk
+  - bot
+  - case
+  - status
+  - waiting
+  - balance
+  - statement
+  - due
+  - limit
+  - arrived
+  - app
+  - branch
+  - service
+  - loan
+  - invest
+  - product
+  - chitchat
+  - dollar
+  - inj_override
+  - inj_reveal
+  - inj_internal
+  - inj_role
+  - inj_action
+  - inj_other_customer
+  - markup
+  - decode
+  weighting: sublinear tf (1 + ln count), L2 norm per block (characters, words, concepts)
+  max_chars: 2000
+  embedding_seam: features.embed(text); hashed n-grams + a concept lexicon stand in for a multilingual embedding
+    model (no Bedrock embeddings available offline)
+model:
+  type: multinomial logistic regression (scikit-learn lbfgs, L2)
+  lambda: 1.0e-05
+  C: 6.897503
+  n_train: 7249
+  rows_with_augmentation: 14498
+  augmentation: one word-dropout copy per message (p=0.15, seed 11)
+  lambda_selected_by: mean cross-generator macro-F1 on the train splits
+calibration:
+  method: temperature scaling (NLL)
+  temperature: 1.013921
+  fitted_on: 'cross-fitted validation, n=1744: model trained on A-train scores B-validation and vice versa (held-out
+    phrasings and style)'
+  ece_10_bins_before: 0.016
+  ece_10_bins_after: 0.0149
+training_data:
+  synthetic: true
+  generator_config:
+    n_a: 4500
+    n_b: 4500
+    seed_a: 20260929
+    seed_b: 20261001
+    val_fraction: 0.2
+    split_seed: 7
+  fingerprint_a: 304e00b1ccb26f1426c4746dd190096cc989716a2bd5a21915216bff4dd33539
+  fingerprint_b: c5827e3687ad01ca5056ebb5f386b9335a0e5348120d8826a8b8b76fb0904674
+  n_a: 4499
+  n_b: 4494
+  n_train: 7249
+  n_validation: 1744
+  decontaminated_removed: 2
+  fingerprints_are_after_decontamination: true
+libraries:
+  python: 3.12.15
+  numpy: 2.5.4
+  scipy: 1.18.1
+  scikit_learn: 1.9.1
+metrics:
+  validation_cross_fitted:
+    accuracy: 0.8819
+    macro_f1: 0.8815
+  cross_generator_macro_f1:
+    A_to_B: 0.8783
+    B_to_A: 0.9124
+weights:
+  file: weights.bin
+  dtype: float32
+  byte_order: little
+  layout: '[n_buckets][n_classes] bucket-major, then bias[n_classes]'
+  bytes: 1179684
+  sha256: e93d52c058924bea6c827523475b847163b9e74e2227e424eb9d416c49b5b920

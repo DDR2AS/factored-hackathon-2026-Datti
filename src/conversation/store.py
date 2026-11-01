@@ -314,8 +314,9 @@ def make_stores(env: dict[str, str] | None = None) -> Stores:
                       traces=JsonlTraceSink(env.get("TRACE_DIR") or DEFAULT_TRACE_DIR), backend="memory",
                       reviews=MemoryReviewStore())
     if backend == "dynamodb":
-        raise StoreConfigError(
-            "STORE_BACKEND=dynamodb is not implemented in this repo yet: Andrés writes it "
-            "against the SessionStore/CaseStore/TraceSink protocols in conversation/store.py (#9)."
-        )
+        # cloud/dynamodb_store.py: TABLE_SESSIONS + TABLE_CASES (the review items live in the Cases
+        # table), TRACE_SINK (stdout JSON for CloudWatch by default). boto3 only in the cloud.
+        from cloud.dynamodb_store import make_dynamodb_stores
+
+        return make_dynamodb_stores(env)
     raise StoreConfigError(f"unknown STORE_BACKEND={backend!r}; use 'memory' or 'dynamodb'")

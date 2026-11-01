@@ -13,7 +13,7 @@ import { formatDate } from '../format'
 import { hasKey, useI18n } from '../i18n'
 import { Conversation } from './Conversation'
 import { DecisionPanel } from './DecisionPanel'
-import { INTENT_CLASSES, isProvisionalInvestigator, isReportReliable, neutralize } from './decision'
+import { INTENT_CLASSES, investigatorKind, isReportReliable, neutralize } from './decision'
 import { dropDraft, getDraft, setDraft, type DecisionDraft } from './drafts'
 import { customerLocale, dateTime, moneyWithCode, percent, plainAmount, slaInfo } from './format'
 import { SlaAlertChips } from './SlaClock'
@@ -537,7 +537,7 @@ function queueLabel(q: string, t: ReturnType<typeof useI18n>['t']): string {
 function ReportView({ report, onCite }: { report: InvestigatorReport; onCite: (id: string) => void }) {
   const { t, locale } = useI18n()
   const reliable = isReportReliable(report)
-  const provisional = isProvisionalInvestigator(report)
+  const author = investigatorKind(report)
   const recKey = `rec.${report.recommendation}`
   return (
     <section className="card report" aria-labelledby="report-title">
@@ -545,8 +545,10 @@ function ReportView({ report, onCite }: { report: InvestigatorReport; onCite: (i
         <h2 id="report-title" className="card__title">
           {t('console.report.title')}
         </h2>
-        {provisional ? (
+        {author === 'stub' ? (
           <SourceBadge kind="rule" label={t('console.report.provisional')} />
+        ) : author === 'policy' ? (
+          <SourceBadge kind="rule" label={t('console.report.policy')} />
         ) : (
           <SourceBadge kind="genai" label={t('console.report.genai', { model: report.model_id })} />
         )}

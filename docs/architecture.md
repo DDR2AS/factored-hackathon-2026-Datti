@@ -28,16 +28,19 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    S3O[(Organizer S3 bucket)] -->|make data| RAW[data/raw CSV]
-    RAW --> DDB[(data/processed/latam_bank.duckdb)]
-    DDB -->|make pipeline| GOLD[(data/gold Parquet)]
-    GOLD --> GW[src/gateway, duckdb backend]
-    GOLD -->|make train| MOD[models/]
+    S3O[(Organizer S3 bucket)] -->|make data, with the key| RAW[data/raw CSV]
+    SYN[Synthetic replica, src/etl/synth_dataset.py] -->|make data, no key| RAW
+    RAW -->|make pipeline| BRZ[bronze -> silver -> 194 quality checks]
+    BRZ --> GOLD[(data/gold Parquet, 14 tables)]
+    GOLD --> GW[src/gateway, composite: demo + duckdb]
+    GOLD -->|make train| MOD[src/models/artifacts: M1, M2, M3]
     GW --> ORCH[Orchestrator + lane rules]
     MOD --> ORCH
-    ORCH --> LLM[src/llm, mock provider]
+    ORCH --> LLM[src/llm, mock provider or Claude]
+    ORCH --> INV[src/investigator, G2]
     ORCH --> API[Local API + front end, make up]
     ORCH --> TR[data/traces JSONL]
+    ORCH -->|make eval| EV[240 planted scenarios, v2 vs B1] --> PAGE[docs/evaluacion.md + evaluation page]
 ```
 
 ## Cloud (deployed with CDK; access by request to andres)

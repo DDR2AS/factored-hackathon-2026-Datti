@@ -15,6 +15,8 @@ import aws_cdk as cdk
 PROJECT = "expvivo"
 PROJECT_TITLE = "ExpVivo"
 _STAGE_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,19}$")
+_SERVING_VERSION = re.compile(r"^[0-9]{8,20}$")
+_LLM_PROVIDERS = ("bedrock", "none", "mock")
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,22 @@ class StageConfig:
     budget_limits_usd: tuple[int, ...]
     deployers: tuple[str, ...]
     allowed_origins: tuple[str, ...]
+    # Application backends in AWS (INTERFACES.md #9; common.app_environment). ``llm_provider`` none
+    # runs the chat with the rule extractor and the investigator with its deterministic policy
+    # (a first deploy before Bedrock access is confirmed).
+    llm_provider: str = "bedrock"
+    investigator_backend: str = "g2"
+    # ARNs for bedrock-mantle:CreateInference (the Messages API endpoint of the Mantle client).
+    # "*" until the resource format is confirmed in the Service Authorization Reference; the
+    # statement is also limited to the stage's region by a condition.
+    bedrock_mantle_resources: tuple[str, ...] = ("*",)
+    # Key prefix of the raw CSVs in the raw bucket (the organizers' layout is data/<table>/...).
+    raw_prefix: str = "data/"
+    # Version of a serving export in the lake (serving/<version>/, written by the pipeline's gold
+    # step). When set, the serving table is the DynamoDB import of that file (a new table
+    # expvivo-<stage>-serving-<version>); empty = an empty serving table.
+    serving_import: str | None = None
+    pipeline_storage_mb: int = 4096
 
     @property
     def is_prod(self) -> bool:
@@ -101,6 +119,20 @@ def load_config(app: cdk.App) -> StageConfig:
     if create_budget and not alert_email:
         raise ValueError("createBudget=true needs an alertEmail to notify.")
 
+    llm_provider = str(_context(app, "llmProvider", "bedrock")).strip().lower()
+    if llm_provider not in _LLM_PROVIDERS:
+        raise ValueError(f"llmProvider must be one of {', '.join(_LLM_PROVIDERS)}, not '{llm_provider}'.")
+    investigator_backend = str(_context(app, "investigatorBackend", "g2")).strip().lower()
+    if investigator_backend not in ("g2", "stub"):
+        raise ValueError(f"investigatorBackend must be g2 or stub, not '{investigator_backend}'.")
+    serving_import = str(_context(app, "servingImport", "") or "").strip() or None
+    if serving_import is not None and not _SERVING_VERSION.match(serving_import):
+        raise ValueError(f"servingImport must be the version of a serving export (digits), not '{serving_import}'.")
+    mantle = tuple(str(v) for v in _as_list(_context(app, "bedrockMantleResources", ["*"]))) or ("*",)
+    raw_prefix = str(_context(app, "rawPrefix", "data/"))
+    if raw_prefix and not raw_prefix.endswith("/"):
+        raw_prefix += "/"
+
     return StageConfig(
         stage=stage,
         region=str(_context(app, "region", "us-east-2")),
@@ -116,4 +148,10 @@ def load_config(app: cdk.App) -> StageConfig:
         budget_limits_usd=tuple(int(v) for v in _as_list(_context(app, "budgetLimitsUsd", [50, 100, 150]))),
         deployers=tuple(str(v) for v in _as_list(_context(app, "deployers", []))),
         allowed_origins=tuple(str(v) for v in _as_list(_context(app, "allowedOrigins", ["*"]))),
+        llm_provider=llm_provider,
+        investigator_backend=investigator_backend,
+        bedrock_mantle_resources=mantle,
+        raw_prefix=raw_prefix,
+        serving_import=serving_import,
+        pipeline_storage_mb=int(_context(app, "pipelineStorageMb", 4096)),
     )

@@ -1,6 +1,6 @@
-// Automatic accessibility checks (axe-core through vitest-axe) on the five screens the judges
-// see: the judge-mode landing, Lucía's chat with the live case card, João's chat in Portuguese,
-// the analyst console with a case open, and the trace view. The gate is "no serious or critical
+// Automatic accessibility checks (axe-core through vitest-axe) on the screens the judges see:
+// the judge-mode landing, Lucía's chat with the live case card, João's chat in Portuguese, the
+// analyst console with a case open, the trace view and the evaluation page. The gate is "no serious or critical
 // violation". jsdom has no layout, so axe cannot measure color contrast here (it reports it as
 // incomplete, not as a violation): contrast is covered by the tokens (tokens.css, WCAG AA) and the
 // browser walk, not by this test. Every payload is SYNTHETIC (test/fixtures.ts).
@@ -17,9 +17,18 @@ import { I18nProvider } from '../src/i18n/I18nProvider'
 import { saveTranscript, type TraceRecord } from '../src/session'
 import { ChatView } from '../src/views/ChatView'
 import { ConsoleView } from '../src/views/ConsoleView'
+import { EvaluationView } from '../src/views/EvaluationView'
 import { JudgeLanding } from '../src/views/JudgeLanding'
 import { TraceView } from '../src/views/TraceView'
-import { analystDetail, caseView, chatResponse, listItem, listResponse, sessionResponse } from './fixtures'
+import {
+  analystDetail,
+  caseView,
+  chatResponse,
+  evaluationResponse,
+  listItem,
+  listResponse,
+  sessionResponse,
+} from './fixtures'
 
 const GATE = new Set(['serious', 'critical'])
 
@@ -63,6 +72,7 @@ function fakeApi(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): Api
     ),
     getAnalystCase: vi.fn(async () => analystDetail()),
     decide: vi.fn(),
+    getEvaluation: vi.fn(async () => evaluationResponse()),
     ...overrides,
   } as ApiClient
 }
@@ -201,5 +211,39 @@ describe('axe: no serious or critical violations', () => {
     )
     await screen.findAllByText(/tr-0002/)
     await expectClean()
+  })
+
+  it('evaluation page, in Spanish and in Portuguese, and before any report exists', async () => {
+    const first = render(
+      <ApiContext.Provider value={fakeApi()}>
+        <I18nProvider>
+          <EvaluationView />
+        </I18nProvider>
+      </ApiContext.Provider>,
+    )
+    await screen.findByRole('table', { name: /v2 frente a B1 sobre los mismos escenarios/ })
+    await expectClean('es')
+    first.unmount()
+
+    const second = render(
+      <ApiContext.Provider value={fakeApi()}>
+        <I18nProvider initial="pt">
+          <EvaluationView />
+        </I18nProvider>
+      </ApiContext.Provider>,
+    )
+    await screen.findByRole('table', { name: /v2 frente a B1 nos mesmos cenários/ })
+    await expectClean('pt')
+    second.unmount()
+
+    render(
+      <ApiContext.Provider value={fakeApi({ getEvaluation: vi.fn(async () => evaluationResponse(null)) })}>
+        <I18nProvider>
+          <EvaluationView />
+        </I18nProvider>
+      </ApiContext.Provider>,
+    )
+    await screen.findByRole('heading', { level: 2, name: 'Todavía no hay una evaluación publicada' })
+    await expectClean('unavailable')
   })
 })

@@ -108,6 +108,12 @@ INTERFACES = [
     "DecisionReply", "DecisionLabels", "DecisionRequest", "DecisionResponse",
     # SLA timers
     "CaseNotice", "ClockEvent",
+    # GET /evaluation
+    "EvaluationResponse", "EvaluationReport", "EvaluationScenarios", "EvaluationConfig", "EvaluationMetric",
+    "EvaluationHeadline", "EvaluationLatency", "EvaluationCost", "EvaluationCostProjection",
+    "EvaluationFairness", "EvaluationGroup", "EvaluationGap",
+    "EvaluationSecurity", "EvaluationProbes", "EvaluationLeakProbe", "EvaluationExpiredProbe",
+    "EvaluationToolFailureProbe", "EvaluationModels", "EvaluationComponentStatus", "EvaluationBaseline",
 ]
 
 # Interfaces the client sends: optional fields (`?` / a default) must match. Every other

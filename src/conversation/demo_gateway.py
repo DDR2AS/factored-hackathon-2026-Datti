@@ -28,14 +28,12 @@ reversal) and ``reversal_of``; ``get_customer_profile`` does not exist in #2;
 from __future__ import annotations
 
 import random
-import threading
-from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, time, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 from pathlib import Path
 from statistics import median
-from typing import Any
 
 import yaml
 
@@ -44,166 +42,14 @@ from conversation.fx import to_usd
 DATA_PATH = Path(__file__).parent / "demo" / "customers.yaml"
 
 
-# ---------------------------------------------------------------- errors
-
-class GatewayError(Exception):
-    """Base class of the #2 errors."""
-
-
-class NotOwned(GatewayError):
-    """The record exists but belongs to another customer. The API answers 403 as if absent."""
-
-
-class NotFound(GatewayError):
-    """No such record."""
-
-
-class ToolUnavailable(GatewayError):
-    """The data source failed. Callers retry at most twice, then take the safe path (lane C)."""
-
-
-class NotConfirmed(GatewayError):
-    """``block_card`` was called without the customer's explicit yes."""
-
-
-# ---------------------------------------------------------------- types
-
-@dataclass(frozen=True)
-class GatewayContext:
-    """Who is asking. Built ONLY by the server from a verified session, never from text.
-
-    customer_id: owner of every record the tools may return (server-side, never sent out).
-    session_id: scopes demo state (card blocks, failure switch).
-    trace_id: lets the caller tie tool calls to the trace (#7).
-    """
-
-    customer_id: str
-    session_id: str
-    trace_id: str
-    # "customer" (the chat and the lifecycle of its case) or "analyst" (the console reading
-    # a case). The per-session judge switch ``tools_down`` belongs to the customer's chat: it
-    # never empties what the analyst sees. The process-wide ``--fail tools`` applies to both.
-    actor: str = "customer"
-
-    @classmethod
-    def for_analyst(cls, customer_id: str, session_id: str, trace_id: str) -> "GatewayContext":
-        """Context of the analyst console for a stored case (PROPOSAL to Andrés): owner and
-        session come from the stored case, never from the request."""
-        return cls(customer_id=customer_id, session_id=session_id, trace_id=trace_id, actor="analyst")
-
-
-@dataclass(frozen=True)
-class Txn:
-    """A transaction with the #2 fields plus ``txn_type`` and ``reversal_of`` (proposal)."""
-
-    txn_id: str
-    product_id: str
-    card_last4: str | None
-    local_date: date
-    local_time: str
-    amount: Decimal
-    currency: str
-    amount_usd: Decimal | None
-    merchant_id: str
-    merchant_name: str
-    merchant_category: str
-    status: str
-    response_code: str
-    fraud_score: float | None
-    txn_type: str = "purchase"
-    reversal_of: str | None = None
-    synthetic: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        """JSON-ready dict: dates ISO, money as decimal strings (the #3 evidence format)."""
-        d = asdict(self)
-        d["local_date"] = self.local_date.isoformat()
-        d["amount"] = str(self.amount)
-        d["amount_usd"] = str(self.amount_usd) if self.amount_usd is not None else None
-        return d
-
-
-@dataclass(frozen=True)
-class FeeItem:
-    fee_code: str
-    merchant_id: str
-    description: str
-    amount: Decimal
-    frequency: str
-
-
-@dataclass(frozen=True)
-class FeeRule:
-    """Synthetic fee schedule of one product (#2 ``get_fee_schedule``)."""
-
-    product_id: str
-    product_name: str
-    currency: str
-    fees: tuple[FeeItem, ...]
-    synthetic: bool = True
-
-
-@dataclass(frozen=True)
-class Baseline:
-    """Usual behaviour of the customer, from purchases older than 14 days before the
-    reference date (so the disputed recent charges do not define "normal")."""
-
-    window_from: date | None
-    window_to: date
-    n_txns: int
-    currency: str
-    median_amount: Decimal | None
-    p90_amount: Decimal | None
-    top_categories: tuple[str, ...]
-    top_merchants: tuple[str, ...]
-    usual_hours: tuple[int, int] | None
-    synthetic: bool = True
-
-
-@dataclass(frozen=True)
-class Contact:
-    contact_id: str
-    date: date
-    channel: str
-    contact_type: str  # complaint | inquiry
-    subcategory: str | None
-    status: str
-    synthetic: bool = True
-
-
-@dataclass(frozen=True)
-class Card:
-    card_id: str
-    product_id: str
-    card_last4: str
-    status: str  # active | blocked
-    synthetic: bool = True
-
-
-@dataclass(frozen=True)
-class CardStatus:
-    """Read-back after ``block_card``: the state as stored, not as requested."""
-
-    card_id: str
-    card_last4: str
-    status: str
-    changed_at: datetime | None
-    synthetic: bool = True
-
-
-@dataclass(frozen=True)
-class CustomerProfile:
-    """Server-side profile (proposal to Andrés; not in #2). First name only, no PII."""
-
-    display_name: str
-    language: str
-    locale: str
-    country: str
-    currency: str
-    segment: str
-    reference_date: date
-    products: tuple[dict, ...]
-    synthetic: bool = True
+# ---------------------------------------------------------------- types and errors
+# Shared by every backend (src/gateway/types.py); re-exported here under the same names, so
+# ``demo_gateway.Txn``, ``demo_gateway.NotOwned`` ... keep working.
+from gateway.types import (  # noqa: E402,F401 (re-exported: gw.GatewayError, gw.fee_item_for_txn)
+    Baseline, Card, CardStatus, Contact, CustomerProfile, FeeItem, FeeRule, GatewayContext, GatewayError,
+    NotConfirmed, NotFound, NotOwned, ToolUnavailable, Txn, fee_item_for_txn,
+)
+from gateway import state as _state  # noqa: E402
 
 
 @dataclass
@@ -352,12 +198,7 @@ def _load(path: Path = DATA_PATH) -> _Demo:
 
 
 # ---------------------------------------------------------------- demo state (in memory)
-
-_lock = threading.Lock()
-_blocks: dict[tuple[str, str], datetime] = {}  # (session_id, card_id) -> blocked_at
-_fail_all = False
-_fail_sessions: set[str] = set()
-
+# Card blocks and the failure switch live in gateway.state, shared with the duckdb backend.
 
 def set_tool_failure(session_id: str | None, on: bool) -> None:
     """Turn the tool-failure switch on or off.
@@ -365,20 +206,12 @@ def set_tool_failure(session_id: str | None, on: bool) -> None:
     session_id=None switches the whole process (``local_api.py --fail tools``); a session id
     switches only that session. While on, every tool raises ``ToolUnavailable``.
     """
-    global _fail_all
-    with _lock:
-        if session_id is None:
-            _fail_all = on
-        elif on:
-            _fail_sessions.add(session_id)
-        else:
-            _fail_sessions.discard(session_id)
+    _state.set_tool_failure(session_id, on)
 
 
 def tool_failure_on(session_id: str | None) -> bool:
     """Whether tools fail for this session (its own switch or the process-wide one)."""
-    with _lock:
-        return _fail_all or (session_id is not None and session_id in _fail_sessions)
+    return _state.tool_failure_on(session_id)
 
 
 def reset_demo_state(session_id: str | None = None) -> None:
@@ -386,22 +219,11 @@ def reset_demo_state(session_id: str | None = None) -> None:
 
     Tests and server restarts only. The judge switch ``expire_session`` does NOT call this: a
     card blocked with the customer's yes stays blocked after the session ends (SEC-01)."""
-    global _fail_all
-    with _lock:
-        if session_id is None:
-            _blocks.clear()
-            _fail_sessions.clear()
-            _fail_all = False
-        else:
-            for k in [k for k in _blocks if k[0] == session_id]:
-                del _blocks[k]
-            _fail_sessions.discard(session_id)
+    _state.reset(session_id)
 
 
 def _customer(ctx: GatewayContext) -> _Customer:
-    with _lock:
-        failing = _fail_all or (ctx.actor != "analyst" and ctx.session_id in _fail_sessions)
-    if failing:
+    if _state.failing_for(ctx.session_id, ctx.actor):
         raise ToolUnavailable("demo gateway: failure switch is on")
     cust = _load().customers.get(ctx.customer_id)
     if cust is None:
@@ -454,15 +276,6 @@ def profile_for_customer_id(customer_id: str) -> CustomerProfile | None:
 def data_version() -> str:
     """Version string of demo/customers.yaml (goes into traces)."""
     return _load().version
-
-
-def fee_item_for_txn(rule: FeeRule, txn: Txn) -> FeeItem | None:
-    """Pure helper (not a #2 tool): the schedule entry a fee txn corresponds to, by
-    merchant_id, or None if the txn is not a scheduled fee of that product. Whether the
-    amount matches (``item.amount == txn.amount``) is the caller's evidence."""
-    if txn.product_id != rule.product_id:
-        return None
-    return next((i for i in rule.fees if i.merchant_id == txn.merchant_id), None)
 
 
 # ---------------------------------------------------------------- #2 tools
@@ -575,8 +388,7 @@ def get_prior_contacts(ctx: GatewayContext) -> list[Contact]:
 def get_cards(ctx: GatewayContext) -> list[Card]:
     """Cards of the customer with the status as seen by this session (blocks applied)."""
     cust = _customer(ctx)
-    with _lock:
-        blocked = {cid for (sid, cid) in _blocks if sid == ctx.session_id}
+    blocked = _state.blocked_cards(ctx.session_id)
     return [Card(card_id=k.card_id, product_id=k.product_id, card_last4=k.card_last4,
                  status="blocked" if k.card_id in blocked else k.status) for k in cust.cards]
 
@@ -592,9 +404,7 @@ def block_card(ctx: GatewayContext, card_id: str, confirmed_by_customer: bool) -
         raise NotOwned("card") if card_id in _load().card_owner else NotFound("card")
     if confirmed_by_customer is not True:
         raise NotConfirmed("block_card needs the customer's explicit yes")
-    with _lock:
-        _blocks.setdefault((ctx.session_id, card_id), datetime.now(timezone.utc))
-        changed_at = _blocks[(ctx.session_id, card_id)]
+    changed_at = _state.block(ctx.session_id, card_id)
     current = next(k for k in get_cards(ctx) if k.card_id == card_id)
     return CardStatus(card_id=card_id, card_last4=current.card_last4, status=current.status,
                       changed_at=changed_at)

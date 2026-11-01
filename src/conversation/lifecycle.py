@@ -523,7 +523,8 @@ class LocalLifecycle:
         if report is not None:
             self.stores.reviews.put_report(case.case_id, report)
             case.investigation_id = report["report_id"]
-            self._emit(case, stored.session_id, "rule", "investigator_stub", version=report["prompt_version"],
+            actor, name = getattr(self.investigator, "trace_step", ("rule", "investigator_stub"))
+            self._emit(case, stored.session_id, actor, name, version=report["prompt_version"],
                        inp=f"case:{case.case_id}",
                        out=(f"report:{report['report_id']};rec:{report['recommendation']};"
                             f"removed:{report['removed_claims']};tools:{report['tool_calls']}"),
@@ -534,7 +535,8 @@ class LocalLifecycle:
                 case.handoff.open_questions.append(note)
             if "evidence_incomplete" not in case.urgency_flags:
                 case.urgency_flags.append("evidence_incomplete")
-            self._emit(case, stored.session_id, "rule", "investigator_stub", version=None,
+            actor, name = getattr(self.investigator, "trace_step", ("rule", "investigator_stub"))
+            self._emit(case, stored.session_id, actor, name, version=None,
                        inp=f"case:{case.case_id}", out=None, latency_ms=latency, error=error)
         self._move(stored, CaseStatus.awaiting_analyst, "report_ready" if report else f"no_report:{error}")
 
@@ -556,18 +558,41 @@ class LocalLifecycle:
             pass  # tracing never breaks the lifecycle
 
 
+INVESTIGATOR_BACKENDS = ("stub", "g2")
+
+
+def make_investigator(env: dict[str, str]) -> Callable[..., dict]:
+    """``INVESTIGATOR_BACKEND``: ``stub`` (the deterministic provisional report, default when unset)
+    or ``g2`` (the investigator agent in ``src/investigator``: read-only tools through the gateway,
+    tool and time budget, citation check; its model comes from ``LLM_PROVIDER``)."""
+    name = (env.get("INVESTIGATOR_BACKEND") or "stub").strip().lower()
+    if name not in INVESTIGATOR_BACKENDS:
+        raise StoreConfigError(f"unknown INVESTIGATOR_BACKEND={name!r}; use 'stub' or 'g2'")
+    if name == "stub":
+        return investigate
+    from investigator.agent import make_investigator as make_g2
+
+    return make_g2(env)
+
+
 def make_lifecycle(env: dict[str, str], stores: Stores, clock: Callable[[], datetime] | None = None,
                    delay_seconds: float | None = None, sleep: Callable[[float], None] = time.sleep,
-                   sla_scale: float | None = None) -> CaseLifecycle:
+                   sla_scale: float | None = None, gateway: Any = default_gateway) -> CaseLifecycle:
     """``LIFECYCLE_BACKEND``: ``local`` (default with STAGE=local or STORE_BACKEND=memory) or
-    ``stepfunctions`` (Andrés; not in this repo yet, so it fails loudly instead of pretending)."""
+    ``stepfunctions`` (the cloud state machine, ``cloud/stepfunctions_lifecycle.py``; needs the
+    DynamoDB stores and ``CASE_STATE_MACHINE_ARN``)."""
     backend = (env.get("LIFECYCLE_BACKEND") or "").strip().lower() or "local"
     if backend == "local":
         if delay_seconds is None:
             delay_seconds = delay_from_env(env)
         if sla_scale is None:
             sla_scale = sla_scale_from_env(env)
-        return LocalLifecycle(stores, clock=clock, delay_seconds=delay_seconds, sleep=sleep, sla_scale=sla_scale)
+        return LocalLifecycle(stores, clock=clock, gateway=gateway, delay_seconds=delay_seconds, sleep=sleep,
+                              sla_scale=sla_scale, investigator=make_investigator(env))
     if backend == "stepfunctions":
-        raise StoreConfigError("LIFECYCLE_BACKEND=stepfunctions is Andrés's (Step Functions); not in this repo yet")
+        # cloud/stepfunctions_lifecycle.py: StartExecution / SendTaskSuccess / EventBridge Scheduler;
+        # advance only reads. Needs CASE_STATE_MACHINE_ARN (WorkflowStack.workflow_environment, #9).
+        from cloud.stepfunctions_lifecycle import make_stepfunctions_lifecycle
+
+        return make_stepfunctions_lifecycle(env, stores, clock=clock, gateway=gateway, sla_scale=sla_scale)
     raise StoreConfigError(f"unknown LIFECYCLE_BACKEND={backend!r}; use 'local' or 'stepfunctions'")

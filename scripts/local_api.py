@@ -66,6 +66,7 @@ DIST = REPO_ROOT / "frontend" / "dist"
 # Copy of infra/stacks/api_stack.py (team repo). Keep in sync; a test reads that file.
 PUBLIC_ROUTES = [
     ("/health", "GET"),
+    ("/evaluation", "GET"),
     ("/session", "POST"),
     ("/chat", "POST"),
     ("/cases/{case_id}", "GET"),
@@ -82,6 +83,34 @@ LOCAL_ANALYST_CLAIMS = {"sub": "analista-local", "email": "analista@demo.local"}
 ANALYST_TOKEN_ENV = "LOCAL_ANALYST_TOKEN"
 
 LOCAL_DEFAULTS = {"STAGE": "local", "STORE_BACKEND": "memory", "LLM_PROVIDER": "mock"}
+# --config: which version of the system the local server runs (the same two configurations `make eval`
+# compares). v2 is the default and only fills variables that .env or the environment left unset; b1
+# (v1.4 rules only: keyword triage, rule ranking, stub investigator, no model) is forced, to compare.
+CONFIGS = {
+    "v2": {"M1_BACKEND": "model", "M2_BACKEND": "model", "INVESTIGATOR_BACKEND": "g2"},
+    "b1": {"M1_BACKEND": "rule", "M2_BACKEND": "keywords", "INVESTIGATOR_BACKEND": "stub", "LLM_PROVIDER": "none"},
+}
+
+
+def default_gateway_backend() -> str:
+    """composite (judge-mode customers + the dataset's customers from gold) when `make pipeline` has
+    built data/gold; otherwise the six judge-mode customers alone."""
+    data_dir = Path(os.environ.get("DATA_DIR") or REPO_ROOT / "data")
+    return "composite" if (data_dir / "gold" / "_meta.yaml").exists() else "demo"
+
+
+def apply_config(name: str) -> None:
+    os.environ.setdefault("GATEWAY_BACKEND", default_gateway_backend())
+    for k, v in CONFIGS[name].items():
+        if name == "v2":
+            os.environ.setdefault(k, v)
+        else:
+            os.environ[k] = v
+
+
+def describe_config(name: str) -> str:
+    keys = ("GATEWAY_BACKEND", "M1_BACKEND", "M2_BACKEND", "INVESTIGATOR_BACKEND", "LLM_PROVIDER")
+    return f"Configuración {name}: " + ", ".join(f"{k}={os.environ.get(k, '')}" for k in keys)
 LAMBDA_TIMEOUT_S = 29
 GATEWAY_TIMEOUT_S = 30
 # Same limit as handlers/api.py MAX_BODY_BYTES (copied so this file needs nothing from src/ to
@@ -423,14 +452,17 @@ def llm_timeout_seconds() -> float:
 
 def configure(env_file: Path | None, fail_tools: bool, ttl_minutes: float | None,
               fail_model: bool = False, investigation_delay: float | None = None,
-              llm: str | None = None, sla_scale: float | None = None) -> None:
+              llm: str | None = None, sla_scale: float | None = None, config: str | None = None) -> None:
     """Environment, sys.path and demo switches; builds the app eagerly so errors show at start.
-    ``llm`` ("mock" | "none") overrides LLM_PROVIDER from .env or the environment."""
+    ``llm`` ("mock" | "none") overrides LLM_PROVIDER from .env or the environment. ``config``
+    ("v2" | "b1", see CONFIGS) picks the system version; None leaves the backends as they are."""
     if str(SRC) not in sys.path:
         sys.path.insert(0, str(SRC))
     load_env_file(env_file or REPO_ROOT / ".env")
     for k, v in LOCAL_DEFAULTS.items():
         os.environ.setdefault(k, v)
+    if config is not None:
+        apply_config(config)
     if llm is not None:
         os.environ["LLM_PROVIDER"] = llm
     if ttl_minutes is not None:
@@ -460,8 +492,11 @@ def main(argv: list[str] | None = None) -> int:
                              "plugs a fake model that answers after LLM_TIMEOUT_SECONDS (default 8)")
     parser.add_argument("--ttl-minutes", type=float, default=None, help="session lifetime (default 15)")
     parser.add_argument("--investigation-delay", type=float, default=None,
-                        help="seconds a lane B money case stays investigating before the (stub) report "
+                        help="seconds a lane B money case stays investigating before the investigator report "
                              "(LOCAL_INVESTIGATION_DELAY_SECONDS, default 4)")
+    parser.add_argument("--config", choices=sorted(CONFIGS), default="v2",
+                        help="v2 (default: trained M1 and M2, G2 investigator, gold customers when data/gold "
+                             "exists) or b1 (the v1.4 rules-only version, to compare)")
     parser.add_argument("--llm", choices=["mock", "none"], default=None,
                         help="G1 extractor: 'mock' (deterministic fixtures, default via LLM_PROVIDER) or "
                              "'none' (regex extractor only); overrides LLM_PROVIDER")
@@ -476,7 +511,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--sla-scale must be > 0 and <= 1")
 
     configure(args.env_file, "tools" in args.fail, args.ttl_minutes, fail_model="model" in args.fail,
-              investigation_delay=args.investigation_delay, llm=args.llm, sla_scale=args.sla_scale)
+              investigation_delay=args.investigation_delay, llm=args.llm, sla_scale=args.sla_scale,
+              config=args.config)
     token, generated = resolve_analyst_token()
     server = make_server(args.host, args.port, args.dist, analyst_token=token)
     print(f"API local en http://{args.host}:{args.port}/api/health · front en http://{args.host}:{args.port}/ "
@@ -484,6 +520,7 @@ def main(argv: list[str] | None = None) -> int:
           f"SESSION_TTL_MINUTES={os.environ.get('SESSION_TTL_MINUTES', '15')}, "
           f"LOCAL_INVESTIGATION_DELAY_SECONDS={os.environ.get('LOCAL_INVESTIGATION_DELAY_SECONDS', '4')}, "
           f"fail={','.join(args.fail) or 'none'})", flush=True)
+    print(describe_config(args.config), flush=True)
     from conversation.lifecycle import sla_scale_from_env
 
     scale = sla_scale_from_env()

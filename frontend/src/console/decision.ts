@@ -35,10 +35,27 @@ export function isReportReliable(report: Pick<InvestigatorReport, 'citations_val
   return report.citations_valid && report.removed_claims <= 1
 }
 
+/**
+ * Who wrote an investigator report, for its badges in the console:
+ * - 'stub': the deterministic local stub (model_id "stub-…", prompt_version "stub-provisional")
+ *   or a report without a model id. Not GenAI.
+ * - 'policy': G2's deterministic policy, which runs without model credentials (model_id
+ *   "policy-…", e.g. "policy-g2-v1"; prompt_version "g2_investigator@v1"): a transparent
+ *   heuristic over the same tools and citation check. Not GenAI.
+ * - 'model': any other model_id is a real model's (GenAI).
+ */
+export type InvestigatorKind = 'stub' | 'policy' | 'model'
+
+export function investigatorKind(report: Pick<InvestigatorReport, 'model_id' | 'prompt_version'>): InvestigatorKind {
+  const id = (report.model_id as string | null) ?? ''
+  if (!id || id.startsWith('stub-') || report.prompt_version === 'stub-provisional') return 'stub'
+  if (id.startsWith('policy-')) return 'policy'
+  return 'model'
+}
+
 /** The deterministic stub (G2 is Andrés's) or a report without a model: not GenAI. */
 export function isProvisionalInvestigator(report: Pick<InvestigatorReport, 'model_id' | 'prompt_version'>): boolean {
-  const id = (report.model_id as string | null) ?? ''
-  return !id || id.startsWith('stub-') || report.prompt_version === 'stub-provisional'
+  return investigatorKind(report) === 'stub'
 }
 
 export function labelsFor(intentLabel: IntentLabel, intent: CaseIntent | null): DecisionLabels | undefined {

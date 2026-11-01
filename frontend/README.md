@@ -20,7 +20,7 @@ En `npm run dev` la CSP de `index.html` se quita (Vite necesita scripts y estilo
 
 ## Rutas
 
-`#/` modo juez · `#/chat/<demo_key>` chat con tarjeta en vivo (sondea el caso de ruta B, interruptores del juez) · `#/consola` y `#/consola/<case_id>` consola del analista (entra con el `LOCAL_ANALYST_TOKEN` que imprime `scripts/local_api.py`; Cognito preparado, no habilitado: ver `src/console/auth.ts`) · `#/traza` y `#/traza/<trace_id>` trazas de los turnos de la pestaña (leídas del transcript en sessionStorage, sin ruta nueva) · `#/evaluacion`: "disponible pronto". Rutas hash para no tocar CloudFront.
+`#/` modo juez · `#/chat/<demo_key>` chat con tarjeta en vivo (sondea el caso de ruta B, interruptores del juez) · `#/consola` y `#/consola/<case_id>` consola del analista (entra con el `LOCAL_ANALYST_TOKEN` que imprime `scripts/local_api.py`; Cognito preparado, no habilitado: ver `src/console/auth.ts`) · `#/traza` y `#/traza/<trace_id>` trazas de los turnos de la pestaña (leídas del transcript en sessionStorage, sin ruta nueva) · `#/evaluacion` página de evaluación: lee `GET /api/evaluation` (pública, sin token), que sirve el último `data/eval/report_latest.yaml` de `make eval` sin las filas por escenario. Rutas hash para no tocar CloudFront.
 
 ## Dónde está cada cosa
 

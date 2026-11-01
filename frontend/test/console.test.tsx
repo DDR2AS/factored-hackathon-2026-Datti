@@ -209,6 +209,41 @@ describe('case detail', () => {
     expect(screen.queryByTestId('unreliable-strip')).toBeNull()
   })
 
+  it.each([
+    [
+      'the stub',
+      'stub-g2-deterministic',
+      'stub-provisional',
+      'Investigador provisional (reglas) · sin GenAI',
+      'Plantilla del investigador provisional · sin GenAI',
+      'badge--rule',
+    ],
+    [
+      'G2 deterministic policy (no model credentials)',
+      'policy-g2-v1',
+      'g2_investigator@v1',
+      'Investigador G2 · política determinista (sin modelo)',
+      'Borrador del investigador G2 · política determinista (sin modelo)',
+      'badge--rule',
+    ],
+    [
+      'a real model',
+      'us.anthropic.claude-sonnet-5',
+      'g2_investigator@v1',
+      'GenAI · us.anthropic.claude-sonnet-5',
+      'Generado por IA · no enviado',
+      'badge--genai',
+    ],
+  ])('labels the report and its draft written by %s', async (_who, model_id, prompt_version, reportLabel, draftLabel, badge) => {
+    signIn()
+    renderConsole(fakeApi({ getAnalystCase: vi.fn(async () => analystDetail({ report: report({ model_id, prompt_version }) })) }))
+    await screen.findByRole('heading', { level: 1, name: /EV-1A2B3C4D/ })
+    const reportBadge = await screen.findByText(reportLabel)
+    expect(reportBadge.closest('.badge')?.className).toContain(badge)
+    const draftBadge = screen.getByText(draftLabel)
+    expect(draftBadge.closest('.badge')?.className).toContain(badge)
+  })
+
   it('a citation chip opens the record in the Evidencia tab', async () => {
     const user = userEvent.setup()
     signIn()

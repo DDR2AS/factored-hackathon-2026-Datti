@@ -178,17 +178,39 @@ def test_mock_without_fixture_raises_no_fixture_and_checks_the_reference_date():
                                      "reference_date": "2026-06-16"})
 
 
-def test_provider_selection():
+@pytest.fixture
+def no_credentials(monkeypatch):
+    """bedrock/anthropic offline: the src/llm client factory fails as it does without
+    ANTHROPIC_API_KEY or AWS credentials (never a network call). Yields the providers tried."""
+    import llm
+    from llm import client as llm_client
+
+    tried: list[str] = []
+
+    def factory(provider, **kwargs):
+        tried.append(provider)
+        raise llm.ProviderUnavailable(f"{provider}: sin credenciales (prueba)")
+
+    llm.reset_clients()
+    monkeypatch.setattr(llm_client, "make_client", factory)
+    yield tried
+    llm.reset_clients()
+
+
+def test_provider_selection(no_credentials):
     assert llm_port.load_llm_client({}) is None
     assert llm_port.load_llm_client({"LLM_PROVIDER": "none"}) is None
     assert isinstance(llm_port.load_llm_client({"LLM_PROVIDER": "mock"}), llm_port.MockLLMClient)
-    bedrock = llm_port.load_llm_client({"LLM_PROVIDER": "bedrock"})  # src/llm does not exist yet
-    assert isinstance(bedrock, llm_port.UnavailableLLMClient) and "Andrés" in bedrock.reason
-    with pytest.raises(llm_port.ModelUnavailable):
-        bedrock.complete("g1_extract", {"text": "x"})
+    for name in ("bedrock", "anthropic"):  # both are answered by the src/llm package
+        client = llm_port.load_llm_client({"LLM_PROVIDER": name})
+        assert isinstance(client, llm_port.PackageLLMClient) and client.provider == name
+        with pytest.raises(llm_port.ModelUnavailable):  # no credentials here
+            client.complete("g1_extract", {"text": "x"})
+        line = llm_port.describe({"LLM_PROVIDER": name})
+        assert f"proveedor {name}" in line and "modelo chat" in line
+    assert no_credentials == ["bedrock", "anthropic"]
     with pytest.raises(ValueError):
         llm_port.load_llm_client({"LLM_PROVIDER": "openai"})
-    assert "pendiente de Andrés" in llm_port.describe({"LLM_PROVIDER": "bedrock"})
 
 
 def test_prompt_is_versioned_in_src_and_declares_the_text_as_data():
@@ -210,9 +232,14 @@ def test_prompt_is_versioned_in_src_and_declares_the_text_as_data():
 
 def test_no_model_id_is_hard_coded():
     # Model IDs look like "anthropic.claude-...", "us.anthropic...", "claude-<x>", "<family>-<n>".
+    # In src/ they live only in the #8 client's config ("model_role maps to a model ID in config").
     pattern = re.compile(r"anthropic\.claude|us\.anthropic|claude-[a-z0-9]|\b(?:haiku|sonnet|opus)-\d", re.IGNORECASE)
+    config_files = {ROOT / "src" / "llm" / "models.yaml", ROOT / "src" / "llm" / "prices.yaml"}
+    assert all(p.exists() for p in config_files)
     for path in list((ROOT / "src").rglob("*.py")) + list((ROOT / "src").rglob("*.md")) + \
             list((ROOT / "src").rglob("*.yaml")) + [ROOT / "scripts" / "local_api.py"]:
+        if path in config_files:
+            continue
         hits = pattern.findall(path.read_text(encoding="utf-8"))
         assert not hits, (path, hits)
 
@@ -327,11 +354,15 @@ def test_timeout_falls_back_to_the_regex_and_degrades():
     assert r["degraded"] == ["model_timeout"] and "SUPER AHORRO SA" in r["reply_text"]
 
 
-def test_bedrock_without_src_llm_degrades_to_the_regex():
-    app = make_app(llm=llm_port.load_llm_client({"LLM_PROVIDER": "bedrock"}))
-    r = Conv(app, "lucia").say("me cobraron como 450 en el super el 12")
-    assert r["degraded"] == ["model_timeout"] and g1_step(r)["error_code"] == "model_unavailable"
-    assert "SUPER AHORRO SA" in r["reply_text"]
+@pytest.mark.parametrize("name", ["bedrock", "anthropic"])
+def test_provider_without_credentials_degrades_to_the_regex(name, no_credentials):
+    app = make_app(llm=llm_port.load_llm_client({"LLM_PROVIDER": name}))
+    for _ in range(2):  # every turn; the second one fails fast (back-off), with the same fallback
+        r = Conv(app, "lucia").say("me cobraron como 450 en el super el 12")
+        assert r["degraded"] == ["model_timeout"] and g1_step(r)["error_code"] == "model_unavailable"
+        assert g1_step(r)["version"] == "g1_extract@v1" and r["trace_summary"]["model_id"] is None
+        assert "SUPER AHORRO SA" in r["reply_text"]
+    assert no_credentials == [name]  # the client is not rebuilt on every turn
 
 
 def test_the_model_sees_only_redacted_text_as_data_and_has_no_say_on_the_lane():

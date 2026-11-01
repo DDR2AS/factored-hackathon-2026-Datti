@@ -1,5 +1,7 @@
 # Expediente Vivo v2: complaint and dispute handling with controlled AI
 
+> **Reemplazado (29 oct).** La versión final es [`README.md`](../README.md); este borrador del 29 sep queda solo como historial.
+
 > **Nota para el equipo (borrar antes de entregar).** Borrador del README final del repo público
 > `factored-hackathon-2026-Datti`, escrito el 29 sep (rama `arturo/m1-chat-api-front`; se verificó en el repo
 > personal de Arturo antes de copiarlo). Sigue `templates/README.md` pero va ordenado por los criterios de evaluación

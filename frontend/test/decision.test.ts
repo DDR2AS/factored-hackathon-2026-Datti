@@ -5,6 +5,7 @@ import type { CaseIntent, DecisionRequest } from '../src/api/types'
 import {
   buildDecisionRequest,
   decisionProblems,
+  investigatorKind,
   isProvisionalInvestigator,
   isReportReliable,
   labelsFor,
@@ -32,6 +33,19 @@ describe('report reliability (same rule as contract.report_reliable)', () => {
     expect(isProvisionalInvestigator({ model_id: 'stub-g2-deterministic', prompt_version: 'stub-provisional' })).toBe(true)
     expect(isProvisionalInvestigator({ model_id: null as unknown as string, prompt_version: 'x' })).toBe(true)
     expect(isProvisionalInvestigator({ model_id: 'claude-sonnet-5', prompt_version: 'g2@1' })).toBe(false)
+  })
+
+  it('who wrote the report: the stub, G2 deterministic policy (neither is GenAI) or a real model', () => {
+    // 1. the stub, unchanged: stub-* ids, the stub prompt version, or no model id at all
+    expect(investigatorKind({ model_id: 'stub-g2-deterministic', prompt_version: 'stub-provisional' })).toBe('stub')
+    expect(investigatorKind({ model_id: 'stub-anything', prompt_version: 'g2_investigator@v1' })).toBe('stub')
+    expect(investigatorKind({ model_id: '', prompt_version: 'g2_investigator@v1' })).toBe('stub')
+    // 2. G2 without model credentials: a transparent heuristic, not GenAI, and not the stub
+    expect(investigatorKind({ model_id: 'policy-g2-v1', prompt_version: 'g2_investigator@v1' })).toBe('policy')
+    expect(isProvisionalInvestigator({ model_id: 'policy-g2-v1', prompt_version: 'g2_investigator@v1' })).toBe(false)
+    // 3. a real model id (whatever its name) is GenAI
+    expect(investigatorKind({ model_id: 'us.anthropic.claude-sonnet-5', prompt_version: 'g2_investigator@v1' })).toBe('model')
+    expect(investigatorKind({ model_id: 'unknown', prompt_version: 'g2_investigator@v1' })).toBe('model')
   })
 })
 

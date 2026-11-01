@@ -1,0 +1,228 @@
+# Contratos de datos de la capa silver (los valida pipeline/quality.py).
+#
+# severity:
+#   error -> el contrato no se cumple: el pipeline se detiene (hay que investigar antes de publicar)
+#   warn  -> defecto conocido del dataset: se reporta y documenta, pero no bloquea
+#
+# Tipos de check: primary_key, unique, min_rows, not_null, accepted_values, ranges,
+# foreign_keys, rules (condición SQL que identifica filas MALAS; la tabla tiene alias t)
+# y freshness (fecha máxima vs SNAPSHOT_DATE).
+
+freshness_max_lag_days: 1
+
+tables:
+  customers:
+    primary_key: customer_id
+    min_rows: 150000
+    unique: [document_number]
+    not_null: [document_number, document_type, first_name, last_name, date_of_birth, country, segment, customer_status, registration_date]
+    accepted_values:
+      country: [México, Colombia, Argentina]
+      segment: [Basic, Plus, Premium, Student]
+      customer_status: [Active, Inactive, Suspended, Closed]
+      document_type: [DNI, CE, CC, Pasaporte, CURP, INE]
+      gender: [M, F, O]
+    ranges:
+      credit_score: [300, 850]
+      age: [18, 110]
+    foreign_keys:
+      - {column: registration_branch_id, ref: branches.branch_id, severity: warn}
+    rules:
+      - {name: tipo_documento_invalido_para_pais, when: dq_document_type_invalid_for_country, severity: warn,
+         description: "México usa DNI (debería ser CURP/INE/Pasaporte)"}
+      - {name: email_compartido, when: dq_email_shared, severity: warn,
+         description: "El email no identifica a un único cliente: no sirve para autenticar"}
+      - {name: last_updated_en_el_futuro, when: dq_last_updated_future, severity: warn}
+
+  products:
+    primary_key: product_id
+    min_rows: 400000
+    not_null: [customer_id, product_type, product_number, currency, balance, opening_date, product_status]
+    accepted_values:
+      product_type: [Cuenta Ahorro, Cuenta Corriente, Tarjeta Crédito, Tarjeta Débito, Préstamo Personal, Préstamo Hipotecario, Inversión, Seguro]
+      product_status: [Active, Blocked, Closed, Suspended]
+      currency: [USD, COP, ARS, MXN]
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+      - {column: opening_branch_id, ref: branches.branch_id, severity: warn}
+    rules:
+      - {name: mora_solo_en_productos_de_credito, when: "days_past_due IS NOT NULL AND NOT is_credit", severity: error}
+      - {name: vencimiento_antes_de_apertura, when: "expiration_date < opening_date", severity: error}
+      - {name: vencido_pero_activo, when: dq_expired_but_active, severity: warn}
+      - {name: numero_de_producto_duplicado, when: dq_product_number_duplicated, severity: warn}
+      - {name: last_updated_en_el_futuro, when: dq_last_updated_future, severity: warn}
+
+  transactions:
+    primary_key: transaction_id
+    min_rows: 4000000
+    not_null: [customer_id, product_id, ts, process_date, transaction_type, amount, currency, amount_usd, status]
+    accepted_values:
+      transaction_type: [Purchase, Withdrawal, Transfer, Payment, Deposit, Adjustment]
+      status: [Approved, Declined, Pending, Reversed]
+      currency: [USD, COP, ARS]
+      response_code: ['00', '05', '14', '51', '54']
+      channel: [POS, ATM, Web, App, Branch, Transfer]
+      fraud_risk_tier: [alto, bajo, sin_score]
+    ranges:
+      amount: [0, null]
+      fraud_score: [0, 100]
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+      - {column: product_id, ref: products.product_id, severity: error}
+      - {column: branch_id, ref: branches.branch_id, severity: warn}
+    rules:
+      - {name: producto_de_otro_cliente, severity: error,
+         when: "NOT EXISTS (SELECT 1 FROM silver.products p WHERE p.product_id = t.product_id AND p.customer_id = t.customer_id)"}
+      - {name: moneda_distinta_a_la_del_producto, severity: error,
+         when: "currency <> (SELECT p.currency FROM silver.products p WHERE p.product_id = t.product_id)"}
+      - {name: fecha_contable_corte_06h, severity: error,
+         description: "process_date = fecha de (ts - 6h): ts cae entre process_date+6h y process_date+30h",
+         when: "ts < process_date + INTERVAL 6 HOUR OR ts > process_date + INTERVAL 30 HOUR"}
+      - {name: codigo_00_si_y_solo_si_aprobada, when: dq_code_status_mismatch, severity: error}
+      - {name: fraude_confirmado_por_score_alto, severity: error,
+         description: "fraud_score > 30 implica fraude en el 100% de los casos (regla usada para escalar)",
+         when: "fraud_risk_tier = 'alto' AND NOT is_fraud"}
+      - {name: codigo_de_rechazo_en_pending_o_reversed, when: dq_decline_code_on_non_declined, severity: warn}
+      - {name: semantica_de_codigo_inconsistente, when: dq_code_semantics_inconsistent, severity: warn,
+         description: "Códigos de tarjeta (14, 54) en productos sin tarjeta o 'fondos insuficientes' (51) en depósitos"}
+      - {name: tx_antes_de_apertura_del_producto, when: dq_before_product_open, severity: warn}
+      - {name: tx_con_tarjeta_vencida, when: dq_after_card_expiry, severity: warn}
+      - {name: tx_de_cliente_inactivo_o_cerrado, when: dq_customer_not_active, severity: warn}
+      - {name: tx_antes_del_registro_del_cliente, when: dq_before_customer_registration, severity: warn}
+      - {name: pais_distinto_al_del_cliente, when: dq_country_differs_from_customer, severity: warn}
+      - {name: amount_usd_imputado, when: dq_amount_usd_imputed, severity: warn}
+      - {name: codigo_de_respuesta_nulo, when: dq_response_code_missing, severity: warn}
+      - {name: categoria_de_comercio_imputada, when: dq_merchant_category_imputed, severity: warn}
+    freshness: process_date
+
+  call_center_interactions:
+    primary_key: interaction_id
+    min_rows: 600000
+    not_null: [customer_id, agent_id, ts, process_date, interaction_type, channel, category]
+    accepted_values:
+      category: [Transaccional, Producto, Queja, Técnico, Comercial, Retención]
+      channel: [Phone, Email, App, WhatsApp, Web Chat, Web]
+      interaction_type: [Inbound Call, Outbound Call, Chat, Email, Video]
+      sentiment: [Muy Positivo, Positivo, Neutral, Negativo, Muy Negativo]
+    ranges:
+      duration_s: [0, 7200]
+      wait_s: [0, 3600]
+      sentiment_score: [-1, 1]
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+      - {column: agent_id, ref: service_agents.agent_id, severity: error}
+    rules:
+      - {name: contact_reason_distinto_de_categoria, when: dq_contact_reason_differs, severity: error}
+      - {name: fecha_contable_corte_08h, severity: error,
+         when: "ts < process_date + INTERVAL 8 HOUR OR ts > process_date + INTERVAL 32 HOUR"}
+      - {name: duracion_faltante, when: dq_duration_missing, severity: warn}
+      - {name: espera_faltante, when: dq_wait_missing, severity: warn}
+      - {name: productos_mencionados_ajenos, when: dq_mentioned_products_not_owned, severity: warn,
+         description: "mentioned_products son IDs aleatorios: casi nunca existen y nunca son del cliente"}
+    freshness: process_date
+
+  call_transcripts:
+    primary_key: transcript_id
+    unique: [interaction_id]
+    not_null: [interaction_id, customer_id, full_text]
+    accepted_values:
+      detected_language: [es]
+    foreign_keys:
+      - {column: interaction_id, ref: call_center_interactions.interaction_id, severity: error}
+    rules:
+      - {name: texto_de_agente_con_placeholder, when: dq_agent_text_placeholder, severity: warn,
+         description: "El texto del agente trae '{monto} {moneda}' sin reemplazar"}
+    freshness: process_date
+
+  satisfaction_surveys:
+    primary_key: survey_id
+    unique: [interaction_id]
+    not_null: [interaction_id, survey_type, score]
+    accepted_values:
+      survey_type: [CSAT, NPS, CES]
+    foreign_keys:
+      - {column: interaction_id, ref: call_center_interactions.interaction_id, severity: error}
+    rules:
+      - {name: csat_fuera_de_escala_1_5, when: "survey_type = 'CSAT' AND score NOT BETWEEN 1 AND 5", severity: error}
+      - {name: nps_fuera_de_escala_0_10, when: "survey_type = 'NPS' AND score NOT BETWEEN 0 AND 10", severity: error}
+      - {name: ces_fuera_de_escala_1_7, when: "survey_type = 'CES' AND score NOT BETWEEN 1 AND 7", severity: error}
+      - {name: cliente_distinto_al_del_contacto, when: dq_customer_differs_from_interaction, severity: error}
+      - {name: agente_distinto_al_del_contacto, when: dq_agent_differs_from_interaction, severity: warn}
+      - {name: categoria_nps_incoherente, when: dq_nps_category_mismatch, severity: warn}
+    freshness: process_date
+
+  complaints:
+    primary_key: complaint_id
+    min_rows: 60000
+    not_null: [customer_id, ts, process_date, case_type, category, subcategory, priority, status]
+    accepted_values:
+      case_type: [Complaint, Claim, Request, Suggestion]
+      category: [Transactions, Fees, Technical, Branch, Service]
+      priority: [Low, Medium, High, Critical]
+      status: [Open, In Process, Escalated, Resolved, Closed, Rejected]
+      reception_channel: [Call Center, Email, Web, App, Branch, Regulator]
+      claimed_currency: [USD, COP, ARS, MXN]
+    ranges:
+      resolution_days: [0, 365]
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+      - {column: affected_product_id, ref: products.product_id, severity: warn}
+      - {column: assigned_agent_id, ref: service_agents.agent_id, severity: warn}
+      - {column: related_branch_id, ref: branches.branch_id, severity: warn}
+    rules:
+      - {name: fecha_contable_corte_08h, severity: error,
+         when: "ts < process_date + INTERVAL 8 HOUR OR ts > process_date + INTERVAL 32 HOUR"}
+      - {name: producto_afectado_de_otro_cliente, when: dq_affected_product_not_owned, severity: warn}
+      - {name: sin_contacto_de_origen, when: dq_origin_interaction_missing, severity: warn}
+      - {name: monto_reclamado_sin_escala_de_moneda, when: dq_claimed_amount_scale_suspect, severity: warn}
+      - {name: subcategoria_imputada, when: dq_subcategory_imputed, severity: warn}
+    freshness: process_date
+
+  service_agents:
+    primary_key: agent_id
+    min_rows: 1000
+    accepted_values:
+      agent_status: [Active, Vacation, Leave, Inactive]
+      experience_level: [Junior, Mid-Senior, Senior, Specialist]
+      agent_type: [Phone, In-Person, Digital, Hybrid]
+    rules:
+      - {name: sucursal_asignada_inexistente, when: dq_assigned_branch_missing, severity: warn}
+      - {name: codigo_de_empleado_duplicado, when: dq_employee_code_duplicated, severity: warn}
+      - {name: email_duplicado, when: dq_email_duplicated, severity: warn}
+
+  branches:
+    primary_key: branch_id
+    rules:
+      - {name: coordenadas_en_isla_nula, when: dq_geo_null_island, severity: warn}
+
+  exchange_rates:
+    primary_key: [rate_date, source_currency, target_currency]
+    accepted_values:
+      source_currency: [USD, MXN, COP, ARS]
+      target_currency: [USD, MXN, COP, ARS]
+    rules:
+      - {name: spread_compra_venta_inconsistente, when: dq_spread_inconsistent, severity: warn}
+    freshness: rate_date
+
+  marketing_campaigns:
+    primary_key: campaign_id
+    rules:
+      - {name: fin_antes_del_inicio, when: dq_end_before_start, severity: warn}
+
+  campaign_sends:
+    primary_key: send_id
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+      - {column: campaign_id, ref: marketing_campaigns.campaign_id, severity: error}
+    rules:
+      - {name: envio_sin_consentimiento_de_marketing, when: dq_sent_without_consent, severity: warn}
+      - {name: envio_fuera_del_segmento_objetivo, when: dq_outside_target_segment, severity: warn}
+      - {name: asunto_con_nan, when: dq_subject_nan, severity: warn}
+
+  digital_events:
+    primary_key: event_id
+    foreign_keys:
+      - {column: customer_id, ref: customers.customer_id, severity: error}
+    rules:
+      - {name: evento_sin_cliente, when: dq_customer_missing, severity: warn}
+      - {name: producto_de_otro_cliente, when: dq_product_not_owned, severity: warn}

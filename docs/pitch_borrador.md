@@ -1,5 +1,7 @@
 # Pitch draft: Expediente Vivo v2 (Team Datti)
 
+> **Reemplazado (29 oct).** La versión final es [`docs/pitch.md`](pitch.md); este borrador del 29 sep queda solo como historial.
+
 > **Nota para el equipo.** Borrador del 29 sep sobre `templates/pitch.md` del repo del equipo. Slides y guion en
 > inglés; las notas en español son para nosotros y no van en las slides. Regla del template: todo número tiene que
 > coincidir con `docs/eval/` y con el README. Hoy **no hay evaluación**: toda cifra de resultados es

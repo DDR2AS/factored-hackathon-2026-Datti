@@ -2,18 +2,20 @@ import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { translate, useI18n, useStrings } from './i18n'
 import { useHashRoute } from './router'
 import { RouteBoundary } from './components/RouteBoundary'
-import { ComingSoon, NotFound } from './views/ComingSoon'
+import { NotFound } from './views/ComingSoon'
 import { JudgeLanding } from './views/JudgeLanding'
 
-// The chat (and its card, trace strip, API state), the console and the trace view load on
-// demand, with their strings and styles, so the landing stays light (RNF-11: < 250 KB).
+// The chat (and its card, trace strip, API state), the console, the trace view and the
+// evaluation load on demand, with their strings and styles, so the landing stays light
+// (RNF-11: < 250 KB).
 const ChatView = lazy(() => import('./views/ChatView').then((m) => ({ default: m.ChatView })))
 const ConsoleView = lazy(() => import('./views/ConsoleView').then((m) => ({ default: m.ConsoleView })))
 const TraceView = lazy(() => import('./views/TraceView').then((m) => ({ default: m.TraceView })))
+const EvaluationView = lazy(() => import('./views/EvaluationView').then((m) => ({ default: m.EvaluationView })))
 
 /** Waits (inside the view's Suspense) for the views' strings of the page language. The chat and
  *  the console have their own language (nested provider with strings="views"); the trace view
- *  speaks the page's. */
+ *  and the evaluation speak the page's. */
 function ViewStrings({ children }: { children: ReactNode }) {
   const { lang } = useI18n()
   useStrings(lang, 'views')
@@ -66,7 +68,13 @@ export default function App() {
           </Suspense>
         )
       case 'evaluation':
-        return <ComingSoon nameKey="nav.evaluation" dateKey="avail.fri2" />
+        return (
+          <Suspense fallback={<div className="page-loading" role="status">{t('console.opening')}</div>}>
+            <ViewStrings>
+              <EvaluationView />
+            </ViewStrings>
+          </Suspense>
+        )
       case 'notFound':
         return <NotFound />
     }

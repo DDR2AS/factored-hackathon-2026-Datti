@@ -622,3 +622,187 @@ export interface DecisionResponse {
   analyst_decision: AnalystDecisionView;
   labels_emitted: string[];
 }
+
+// =====================================================================================
+// GET /evaluation: public, no auth (judges open the page cold). The latest report of
+// `make eval` (src/eval/report.py, data/eval/report_latest.yaml; in the cloud the artifacts
+// bucket's eval/report_latest.yaml) WITHOUT the per-scenario rows (row_counts says how many).
+// No report yet, or one that cannot be read: available false, report null, still HTTP 200.
+// The report is written by the eval harness, not by this server: any value may be null (missing
+// or not of the expected type), unknown keys are dropped. label, target, note, description and
+// limits are the report's Spanish text: data, shown as is. Rates are 0..1.
+// =====================================================================================
+export interface EvaluationResponse {
+  available: boolean;
+  report: EvaluationReport | null;
+  synthetic: true;
+}
+
+export interface EvaluationReport {
+  version: string | null; // e.g. "eval-2026-10-29.1"
+  generated_at: string | null; // ISO 8601 UTC
+  data_source: string | null; // "synthetic_replica" | "organizers_dataset"
+  synthetic: boolean | null;
+  gold_snapshot: string | null; // date of the gold tables
+  seconds: number | null; // how long the run took
+  scenarios: EvaluationScenarios | null;
+  configs: EvaluationConfig[] | null; // v2 and b1_rules_v14
+  headline: EvaluationHeadline[] | null;
+  latency: EvaluationLatency | null;
+  cost: EvaluationCost | null;
+  fairness: EvaluationFairness | null; // v2 only
+  by_kind: Record<string, unknown> | null; // {v2: {<kind>: {n, expected_lane, lanes, ...}}, b1: {...}}
+  security: EvaluationSecurity | null;
+  models: EvaluationModels | null;
+  baseline_b0: EvaluationBaseline[] | null; // historical KPIs from the data
+  limits: string[] | null;
+  row_counts: Record<string, number> | null; // rows per configuration in the report (rows are not sent)
+}
+
+export interface EvaluationScenarios {
+  n: number | null;
+  adversarial: number | null;
+  by_kind: Record<string, number> | null;
+  by_language: Record<string, number> | null;
+  by_country: Record<string, number> | null;
+  seed: number | null;
+}
+
+export interface EvaluationConfig {
+  id: string | null;
+  label: string | null;
+  env: Record<string, unknown> | null; // never a variable whose name looks like a secret
+}
+
+// A rate over n cases: value = k / n; ci95 = bootstrap 95% interval [low, high].
+export interface EvaluationMetric {
+  value: number | null;
+  n: number | null;
+  k: number | null;
+  ci95: number[] | null;
+}
+
+export interface EvaluationHeadline {
+  metric: string | null; // stable id; the UI translates it (label is the report's Spanish text)
+  label: string | null;
+  unit: string | null; // "ratio"
+  target: string | null;
+  v2: EvaluationMetric | null;
+  b1: EvaluationMetric | null; // B1: v1.4 rules only, no investigator
+  pass: boolean | null; // v2 meets the target; null when the metric has no pass rule or no value
+}
+
+export interface EvaluationLatency {
+  turn_p50_ms: number | null;
+  turn_p95_ms: number | null;
+  turns: number | null;
+  investigator_p50_ms: number | null;
+  investigator_p95_ms: number | null;
+  investigations: number | null;
+  target: string | null;
+  note: string | null;
+}
+
+export interface EvaluationCost {
+  per_conversation_usd: number | null; // measured in the run (the mock provider makes no real calls)
+  target: string | null;
+  note: string | null;
+  projected: EvaluationCostProjection | null;
+}
+
+// With real models at list prices and measured prompt sizes: a PROJECTION, not a bill.
+export interface EvaluationCostProjection {
+  chat_model: string | null;
+  investigator_model: string | null;
+  chat_per_conversation_usd: number | null;
+  investigator_per_case_usd: number | null;
+  share_of_conversations_investigated: number | null; // 0..1
+  total_per_conversation_usd: number | null;
+  note: string | null;
+}
+
+export interface EvaluationFairness {
+  by_language: Record<string, EvaluationGroup> | null;
+  by_country: Record<string, EvaluationGroup> | null;
+  target: string | null;
+  gaps: EvaluationGap[] | null;
+}
+
+export interface EvaluationGroup {
+  n: number | null;
+  lane_accuracy: number | null;
+  charge_accuracy: number | null;
+  safe_automated_resolution: number | null;
+  // Of the group's cases that should end in lane A, the share that did: the fair comparison
+  // across groups (the plain rate also depends on the scenario mix). expected_a: how many.
+  auto_resolution_when_expected: number | null;
+  expected_a: number | null;
+  unsafe_wrong_charge_filed: number | null;
+}
+
+// Spread of one metric across the groups of one dimension (max - min, in percentage points).
+// dimension and metric are the report's Spanish text ("idioma", "resolución automática segura").
+export interface EvaluationGap {
+  dimension: string | null;
+  metric: string | null;
+  gap_points: number | null;
+  max: string | null; // group with the highest value
+  min: string | null; // group with the lowest value
+  within_limit: boolean | null;
+  explanation: string | null; // report text; when the gap is above the limit
+}
+
+export interface EvaluationSecurity {
+  v2: EvaluationProbes | null;
+  b1: EvaluationProbes | null;
+}
+
+export interface EvaluationProbes {
+  tool_scope: EvaluationLeakProbe | null; // the tools asked for another customer's records
+  expired_session: EvaluationExpiredProbe | null; // messages after the session expired
+  other_session_case: EvaluationLeakProbe | null; // GET /cases of another session's case
+  tool_failure: EvaluationToolFailureProbe | null; // every tool down
+}
+
+export interface EvaluationLeakProbe {
+  n: number | null;
+  leaks: number | null;
+}
+
+export interface EvaluationExpiredProbe {
+  n: number | null;
+  data_shown: number | null;
+}
+
+export interface EvaluationToolFailureProbe {
+  lane: string | null;
+  degraded: string[] | null;
+  safe: boolean | null;
+}
+
+// m1, m2 and m3 are the model reports' summaries as the report writes them; their shapes follow
+// the models (M2 may be null while it trains), so the page reads them defensively. Lists of more
+// than 50 items inside them (per-item dumps such as M2's test predictions) are not sent.
+export interface EvaluationModels {
+  m1: Record<string, unknown> | null;
+  m2: Record<string, unknown> | null;
+  m3: Record<string, unknown> | null;
+  g1: EvaluationComponentStatus | null;
+  g2: EvaluationComponentStatus | null;
+  g3: EvaluationComponentStatus | null;
+  b2_zero_shot: EvaluationComponentStatus | null;
+}
+
+export interface EvaluationComponentStatus {
+  status: string | null; // "mock" | "policy" | "model" | "not_run" | ...
+  note: string | null;
+}
+
+export interface EvaluationBaseline {
+  metric: string | null;
+  value: number | null;
+  unit: string | null; // ratio | hours | days | count | score_1_5 | ...
+  n: number | null;
+  source: string | null;
+  description: string | null;
+}

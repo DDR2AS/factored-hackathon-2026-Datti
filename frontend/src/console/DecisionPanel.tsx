@@ -17,7 +17,7 @@ import type { MessageKey } from '../i18n/es'
 import {
   buildDecisionRequest,
   decisionProblems,
-  isProvisionalInvestigator,
+  investigatorKind,
   isReportReliable,
   MAX_REASON,
   MAX_REPLY,
@@ -182,7 +182,10 @@ export function DecisionPanel(p: DecisionPanelProps) {
       : null
 
   const decided = detail.case.analyst_decision
-  const provisional = report ? isProvisionalInvestigator(report) : false
+  // Who wrote the draft: the stub, G2's deterministic policy (neither is GenAI) or a model.
+  const author = report ? investigatorKind(report) : 'model'
+  const draftLabel: MessageKey =
+    author === 'stub' ? 'console.draft.provisional' : author === 'policy' ? 'console.draft.policy' : 'console.draft.generated'
   // After the decision the panel shows what the customer actually received (stamped, approved
   // by a person) instead of the draft; an escalation sends nothing, so the draft stays marked
   // as never sent.
@@ -198,10 +201,7 @@ export function DecisionPanel(p: DecisionPanelProps) {
           <SourceBadge kind="human" label={t('console.sent.badge')} />
         ) : (
           report?.draft_reply && (
-            <SourceBadge
-              kind={provisional ? 'rule' : 'genai'}
-              label={t(provisional ? 'console.draft.provisional' : 'console.draft.generated')}
-            />
+            <SourceBadge kind={author === 'model' ? 'genai' : 'rule'} label={t(draftLabel)} />
           )
         )}
       </header>

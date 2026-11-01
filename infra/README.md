@@ -83,13 +83,19 @@ Never deploy `dev` or `prod` from a laptop without agreeing it with Andrés firs
 | --- | --- | --- |
 | `stage` | `dev` | Which copy of the system to build |
 | `models` | Haiku 4.5 / Sonnet 5 / Opus 5 | Bedrock model ID per role (`chat`, `investigator`, `judge`); confirm the exact IDs in the Bedrock console |
-| `bundle` | `false` | `true` installs `src/requirements-lambda.txt` into the Lambda package (needs Docker) |
+| `bundle` | `false` | `true` installs `src/requirements-lambda.txt` (the pipeline Lambda: `src/cloud/requirements-pipeline.txt`) into the Lambda package: pip downloads Linux wheels locally, and only if that fails CDK uses the Docker build image |
 | `warmup` | `false` | `true` pings the API Lambda every 5 minutes (use during judging) |
 | `allowedOrigins` | `["*"]` | CORS origins for the HTTP API |
 | `alertEmail` | none | Email subscribed to alarms and the budget |
 | `createBudget` | `false` | Account-wide monthly budget with alerts at `budgetLimitsUsd`; enable in one stage only |
 | `withAccess` | `false` | Adds the `ExpVivo-Access` stack (IAM deployers group); Andrés only |
 | `deployers` | `[]` | IAM users to create in the deployers group (no credentials are created) |
+| `llmProvider` | `bedrock` | `LLM_PROVIDER` of the Lambdas (`bedrock`, `mock` or `none`) |
+| `investigatorBackend` | `g2` | `INVESTIGATOR_BACKEND` of the investigator Lambda (`g2` or `stub`) |
+| `bedrockMantleResources` | `["*"]` | Resources for `bedrock-mantle:CreateInference` (granted with a region condition; narrow it once the ARN format is confirmed) |
+| `rawPrefix` | `data/` | Prefix of the raw CSV files in the raw bucket (`RAW_PREFIX` of the pipeline) |
+| `servingImport` | empty | A serving export version (digits, e.g. `20261030120000`): creates `expvivo-<stage>-serving-<version>` by DynamoDB import from the lake; switching versions is `deploy --all` |
+| `pipelineStorageMb` | `4096` | Ephemeral `/tmp` of the pipeline Lambda (DuckDB works in `/tmp/data`) |
 
 ## Andrés's one-time account setup
 
