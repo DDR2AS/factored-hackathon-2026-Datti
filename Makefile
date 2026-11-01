@@ -16,8 +16,8 @@ install:
 lint:
 	$(PYTHON) -m compileall -q config src scripts
 
-test:
-	@printf '%s\n' 'test: no tests yet - owners add pytest suites under tests/'
+test:  # arturo: chat API suite (front: cd frontend && npm ci && npm test, needs Node 22.22+/24.15+)
+	$(PYTHON) -m pytest -q tests
 
 build:
 	@printf '%s\n' 'build: nothing to build yet'
@@ -29,23 +29,24 @@ ci: install lint test build licences
 
 # Local workflow targets (owners in parentheses).
 
-data:  # diego: organizer S3 -> data/raw -> data/processed/latam_bank.duckdb
-	$(PYTHON) src/etl/ingest_s3_duckdb.py
+data:  # organizer S3 -> data/raw -> data/processed/latam_bank.duckdb; without the S3 key, the SYNTHETIC replica
+	$(PYTHON) scripts/get_data.py
 
 validate:  # diego: basic table and key checks
 	$(PYTHON) src/etl/validate_data.py
 
-pipeline:  # diego: silver and gold tables (INTERFACES.md #5)
-	@printf '%s\n' 'pipeline: not implemented yet (diego)'
+pipeline:  # bronze -> silver -> quality (194 contracts) -> gold (INTERFACES.md #5) -> DynamoDB serving export
+	$(PYTHON) scripts/run_pipeline.py --serving
 
-train:  # cristhian: M1, M2, M3 (INTERFACES.md #4)
-	@printf '%s\n' 'train: not implemented yet (cristhian)'
+train:  # M1 ranker, M2 intent classifier, M3 risk evidence + lift experiment (INTERFACES.md #4)
+	$(PYTHON) scripts/train.py
 
-eval:  # cristhian: planted scenarios and test messages against baselines
-	@printf '%s\n' 'eval: not implemented yet (cristhian)'
+eval:  # 240 planted scenarios end to end, v2 vs v1.4 rules (B1); report in docs/evaluacion.md
+	$(PYTHON) scripts/evaluate.py
 
-up:  # arturo: run the API and front end locally with duckdb + mock LLM
-	@printf '%s\n' 'up: not implemented yet (arturo)'
+up:  # run the API and front end locally (gold via duckdb, M1/M2 models, G2 investigator, mock LLM)
+	cd frontend && npm ci && npm run build
+	$(PYTHON) scripts/local_api.py --port 8000
 
 # Infrastructure (infra/README.md). Use your own stage: make synth STAGE=dev-<yourname>
 

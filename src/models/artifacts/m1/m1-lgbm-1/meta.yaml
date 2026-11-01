@@ -1,0 +1,30 @@
+model_version: m1-lgbm-1
+primary: model
+data_source: synthetic_replica
+split:
+  train_before: '2025-12-01'
+  val_before: '2026-03-01'
+  test_from: '2026-03-01'
+sizes:
+  train:
+    queries: 30000
+    rows: 64148
+  calib:
+    queries: 12000
+    rows: 25779
+  val:
+    queries: 8000
+    rows: 31022
+  test:
+    queries: 8000
+    rows: 33107
+trees: 318
+calibration:
+  none_logit: -1.9
+  ece_raw: 0.0251
+  ece_calibrated: 0.021
+  method: LightGBM confidence model on a calibration split + isotonic on validation
+    (top-1)
+thresholds:
+  confirm_threshold: 0.95
+  choose_threshold: 0.15

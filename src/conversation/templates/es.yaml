@@ -1,0 +1,350 @@
+# System texts in Spanish (owner: arturo). Rendered by src/conversation/templates.py.
+# Register by country: tú (MX), usted (CO), vos (AR). A text that does not address the
+# customer is a plain string; one that does has the three registers.
+# Variables use {name}; es.yaml and pt.yaml must have the same keys and the same variables
+# (tests/test_templates.py). No text promises a refund or compensation, or says the money
+# will come back: the lane only says what happens next and when.
+# The demo conversation texts are SYNTHETIC; nothing here refers to a real customer.
+
+language: es
+registers: {MX: tu, CO: usted, AR: vos}
+default_register: tu
+
+texts:
+  # ---------------------------------------------------------------- start
+  welcome:
+    tu: "Hola, {name}. Soy el asistente de reclamos de LATAM Bank (demo con datos sintéticos). Puedo revisar un cargo, una comisión o el estado de tu caso. ¿Qué pasó?"
+    usted: "Hola, {name}. Soy el asistente de reclamos de LATAM Bank (demo con datos sintéticos). Puedo revisar un cargo, una comisión o el estado de su caso. ¿Qué pasó?"
+    vos: "Hola, {name}. Soy el asistente de reclamos de LATAM Bank (demo con datos sintéticos). Puedo revisar un cargo, una comisión o el estado de tu caso. ¿Qué pasó?"
+  clarify_intent:
+    tu: "¿Me cuentas qué pasó? Por ejemplo: «no reconozco un cargo de 450 del día 12»."
+    usted: "¿Me cuenta qué pasó? Por ejemplo: «no reconozco un cargo de 450 del día 12»."
+    vos: "¿Me contás qué pasó? Por ejemplo: «no reconozco un cargo de 450 del día 12»."
+  not_understood:
+    tu: "No te entendí bien. ¿Me lo cuentas con otras palabras o eliges una opción?"
+    usted: "No le entendí bien. ¿Me lo cuenta con otras palabras o elige una opción?"
+    vos: "No te entendí bien. ¿Me lo contás con otras palabras o elegís una opción?"
+  ask_language: "¿Seguimos en español o en portugués? / Continuamos em português ou em espanhol?"
+
+  # ---------------------------------------------------------------- find the charge
+  ask_amount:
+    tu: "¿Recuerdas el monto aproximado del cargo?"
+    usted: "¿Recuerda el monto aproximado del cargo?"
+    vos: "¿Te acordás del monto aproximado del cargo?"
+  ask_date:
+    tu: "¿Qué día fue el cargo, más o menos?"
+    usted: "¿Qué día fue el cargo, más o menos?"
+    vos: "¿Qué día fue el cargo, más o menos?"
+  ask_merchant:
+    tu: "¿Recuerdas en qué comercio fue?"
+    usted: "¿Recuerda en qué comercio fue?"
+    vos: "¿Te acordás en qué comercio fue?"
+  ask_more_detail:
+    tu: "No encontré un cargo que coincida con seguridad. ¿Me das otro dato: el monto aproximado, la fecha o el comercio?"
+    usted: "No encontré un cargo que coincida con seguridad. ¿Me da otro dato: el monto aproximado, la fecha o el comercio?"
+    vos: "No encontré un cargo que coincida con seguridad. ¿Me das otro dato: el monto aproximado, la fecha o el comercio?"
+  charge_line: "{date} · {merchant} · {amount} · •••• {last4}"
+  confirm_charge:
+    tu: "Encontré este cargo en tus movimientos: {charge}. ¿Es este?"
+    usted: "Encontré este cargo en sus movimientos: {charge}. ¿Es este?"
+    vos: "Encontré este cargo en tus movimientos: {charge}. ¿Es este?"
+  choose_charge:
+    tu: "Encontré {n} cargos parecidos. ¿Cuál es?"
+    usted: "Encontré {n} cargos parecidos. ¿Cuál es?"
+    vos: "Encontré {n} cargos parecidos. ¿Cuál es?"
+  none_of_these:
+    tu: "Entendido, no es ninguno de esos. ¿Me das otro dato del cargo: monto, fecha o comercio?"
+    usted: "Entendido, no es ninguno de esos. ¿Me da otro dato del cargo: monto, fecha o comercio?"
+    vos: "Entendido, no es ninguno de esos. ¿Me das otro dato del cargo: monto, fecha o comercio?"
+  no_charge_found:
+    tu: "No encontré ese cargo en tus movimientos. ¿Quieres revisar los datos o hablar con una persona?"
+    usted: "No encontré ese cargo en sus movimientos. ¿Quiere revisar los datos o hablar con una persona?"
+    vos: "No encontré ese cargo en tus movimientos. ¿Querés revisar los datos o hablar con una persona?"
+  ask_recognize:
+    tu: "¿Reconoces este cargo?"
+    usted: "¿Reconoce este cargo?"
+    vos: "¿Reconocés este cargo?"
+
+  # ---------------------------------------------------------------- lane A: explained with the record
+  lane_a_recognized:
+    tu: "Gracias por revisarlo. Como reconoces el cargo, no hace falta abrir un caso. Si más adelante notas algo raro, escríbeme de nuevo."
+    usted: "Gracias por revisarlo. Como reconoce el cargo, no hace falta abrir un caso. Si más adelante nota algo raro, escríbame de nuevo."
+    vos: "Gracias por revisarlo. Como reconocés el cargo, no hace falta abrir un caso. Si más adelante notás algo raro, escribime de nuevo."
+  lane_a_already_reversed:
+    tu: "Revisé el registro: este cargo ya tiene una reversión aplicada el {reversal_date} por {amount}. No hace falta abrir un caso."
+    usted: "Revisé el registro: este cargo ya tiene una reversión aplicada el {reversal_date} por {amount}. No hace falta abrir un caso."
+    vos: "Revisé el registro: este cargo ya tiene una reversión aplicada el {reversal_date} por {amount}. No hace falta abrir un caso."
+  lane_a_duplicate_reversed:
+    tu: "Revisé el registro: el cargo repetido ya tiene una reversión aplicada el {reversal_date}. No hace falta abrir un caso."
+    usted: "Revisé el registro: el cargo repetido ya tiene una reversión aplicada el {reversal_date}. No hace falta abrir un caso."
+    vos: "Revisé el registro: el cargo repetido ya tiene una reversión aplicada el {reversal_date}. No hace falta abrir un caso."
+  lane_a_fee_matches:
+    tu: "El cobro de {amount} coincide con la tarifa vigente de tu producto ({fee_name}: {fee_amount}). Por eso no abro un caso. Si quieres, te comunico con una persona."
+    usted: "El cobro de {amount} coincide con la tarifa vigente de su producto ({fee_name}: {fee_amount}). Por eso no abro un caso. Si quiere, le comunico con una persona."
+    vos: "El cobro de {amount} coincide con la tarifa vigente de tu producto ({fee_name}: {fee_amount}). Por eso no abro un caso. Si querés, te comunico con una persona."
+
+  # ---------------------------------------------------------------- lane B: case with a promised date
+  lane_b_case_open:
+    tu: "Abrí el caso {case_id}. Una persona del equipo lo revisará y te dará una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}. Abrir el caso no cambia todavía el estado del cargo: primero se revisa."
+    usted: "Abrí el caso {case_id}. Una persona del equipo lo revisará y le dará una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}. Abrir el caso no cambia todavía el estado del cargo: primero se revisa."
+    vos: "Abrí el caso {case_id}. Una persona del equipo lo va a revisar y te va a dar una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}. Abrir el caso no cambia todavía el estado del cargo: primero se revisa."
+
+  # ---------------------------------------------------------------- lane C: a person now
+  lane_c_handoff:
+    tu: "Tu caso {case_id} pasó al {queue}. Una persona te contactará antes del {first_response_by}. Le dejé el resumen de lo que me contaste, así que no tendrás que repetirlo."
+    usted: "Su caso {case_id} pasó al {queue}. Una persona se comunicará con usted antes del {first_response_by}. Le dejé el resumen de lo que me contó, así que no tendrá que repetirlo."
+    vos: "Tu caso {case_id} pasó al {queue}. Una persona te va a contactar antes del {first_response_by}. Le dejé el resumen de lo que me contaste, así que no vas a tener que repetirlo."
+  # Same, when the customer has not told anything yet (e.g. "Hablar con una persona" at the start).
+  lane_c_handoff_bare:
+    tu: "Tu caso {case_id} pasó al {queue}. Una persona te contactará antes del {first_response_by}."
+    usted: "Su caso {case_id} pasó al {queue}. Una persona se comunicará con usted antes del {first_response_by}."
+    vos: "Tu caso {case_id} pasó al {queue}. Una persona te va a contactar antes del {first_response_by}."
+  lane_c_priority_note: "El caso quedó con prioridad alta."
+  human_request_ack:
+    tu: "Claro, te comunico con una persona."
+    usted: "Claro, le comunico con una persona."
+    vos: "Claro, te comunico con una persona."
+  compensation_ack:
+    tu: "Anoté tu pedido en el caso. Una persona lo revisará; por este canal no puedo confirmar pagos adicionales."
+    usted: "Anoté su pedido en el caso. Una persona lo revisará; por este canal no puedo confirmar pagos adicionales."
+    vos: "Anoté tu pedido en el caso. Una persona lo va a revisar; por este canal no puedo confirmar pagos adicionales."
+
+  # ---------------------------------------------------------------- card block (explicit yes only)
+  lost_card_intro:
+    tu: "Lamento lo de tu tarjeta. Primero puedo bloquearla para que nadie la use."
+    usted: "Lamento lo de su tarjeta. Primero puedo bloquearla para que nadie la use."
+    vos: "Lamento lo de tu tarjeta. Primero puedo bloquearla para que nadie la use."
+  block_offer:
+    tu: "¿Quieres bloquear la tarjeta •••• {last4}? Si la bloqueas, no podrás volver a usarla desde este canal."
+    usted: "¿Quiere bloquear la tarjeta •••• {last4}? Si la bloquea, no podrá volver a usarla desde este canal."
+    vos: "¿Querés bloquear la tarjeta •••• {last4}? Si la bloqueás, no vas a poder volver a usarla desde este canal."
+  block_done: "Listo. Consulté el estado de la tarjeta •••• {last4}: ahora figura como bloqueada."
+  block_declined: "Entendido, no bloqueé la tarjeta."
+  block_failed:
+    tu: "No pude confirmar el bloqueo de la tarjeta •••• {last4}. Te comunico con una persona."
+    usted: "No pude confirmar el bloqueo de la tarjeta •••• {last4}. Le comunico con una persona."
+    vos: "No pude confirmar el bloqueo de la tarjeta •••• {last4}. Te comunico con una persona."
+
+  # ---------------------------------------------------------------- other intents
+  case_status:
+    tu: "Tu caso {case_id} está en estado «{status}». Fecha estimada de resolución: {expected_date}."
+    usted: "Su caso {case_id} está en estado «{status}». Fecha estimada de resolución: {expected_date}."
+    vos: "Tu caso {case_id} está en estado «{status}». Fecha estimada de resolución: {expected_date}."
+  case_status_not_found: "No encontré un caso con ese número en esta conversación."
+  case_status_none: "Todavía no hay un caso abierto en esta conversación."
+  out_of_scope:
+    tu: "Por este canal solo atiendo reclamos sobre cargos, comisiones y el estado de tus casos, así que no puedo ayudarte con esa solicitud. Si quieres, te comunico con una persona; no puedo adelantarte una respuesta."
+    usted: "Por este canal solo atiendo reclamos sobre cargos, comisiones y el estado de sus casos, así que no puedo ayudarle con esa solicitud. Si quiere, le comunico con una persona; no puedo adelantarle una respuesta."
+    vos: "Por este canal solo atiendo reclamos sobre cargos, comisiones y el estado de tus casos, así que no puedo ayudarte con esa solicitud. Si querés, te comunico con una persona; no puedo adelantarte una respuesta."
+  manipulation:
+    tu: "Solo puedo ayudarte con reclamos sobre tus cargos, comisiones o casos. ¿Qué pasó con tu tarjeta o tu cuenta?"
+    usted: "Solo puedo ayudarle con reclamos sobre sus cargos, comisiones o casos. ¿Qué pasó con su tarjeta o su cuenta?"
+    vos: "Solo puedo ayudarte con reclamos sobre tus cargos, comisiones o casos. ¿Qué pasó con tu tarjeta o tu cuenta?"
+
+  # ---------------------------------------------------------------- session and failures
+  session_expired:
+    tu: "Tu sesión terminó por seguridad. Para seguir, empieza una conversación nueva."
+    usted: "Su sesión terminó por seguridad. Para seguir, empiece una conversación nueva."
+    vos: "Tu sesión terminó por seguridad. Para seguir, empezá una conversación nueva."
+  session_limit:
+    tu: "Llegaste al máximo de mensajes de esta conversación. Para seguir, empieza una nueva."
+    usted: "Llegó al máximo de mensajes de esta conversación. Para seguir, empiece una nueva."
+    vos: "Llegaste al máximo de mensajes de esta conversación. Para seguir, empezá una nueva."
+  tool_unavailable:
+    tu: "No pude consultar tus movimientos en este momento. Intenta de nuevo en unos minutos o habla con una persona."
+    usted: "No pude consultar sus movimientos en este momento. Intente de nuevo en unos minutos o hable con una persona."
+    vos: "No pude consultar tus movimientos en este momento. Probá de nuevo en unos minutos o hablá con una persona."
+  tool_unavailable_case:
+    tu: "No pude consultar tus movimientos en este momento. Abrí el caso {case_id}, marcado como incompleto, y una persona lo revisará antes del {first_response_by}."
+    usted: "No pude consultar sus movimientos en este momento. Abrí el caso {case_id}, marcado como incompleto, y una persona lo revisará antes del {first_response_by}."
+    vos: "No pude consultar tus movimientos en este momento. Abrí el caso {case_id}, marcado como incompleto, y una persona lo va a revisar antes del {first_response_by}."
+  model_slow:
+    tu: "Estoy tardando más de lo normal, así que te respondo con opciones fijas. ¿Qué quieres hacer?"
+    usted: "Estoy tardando más de lo normal, así que le respondo con opciones fijas. ¿Qué quiere hacer?"
+    vos: "Estoy tardando más de lo normal, así que te respondo con opciones fijas. ¿Qué querés hacer?"
+
+  # ---------------------------------------------------------------- buttons
+  btn.start_unrecognized: "No reconozco un cargo"
+  btn.start_fee: "Me cobraron una comisión que no corresponde"
+  btn.start_case_status: "¿Cómo va mi caso?"
+  btn.start_lost_card: "Perdí mi tarjeta"
+  btn.human: "Hablar con una persona"
+  btn.confirm_charge: "Es este"
+  btn.none_of_these: "Ninguno de estos"
+  btn.recognize_yes: "Sí, lo reconozco"
+  btn.recognize_no: "No lo reconozco"
+  btn.block_yes: "Sí, bloquear tarjeta •••• {last4}"
+  btn.block_no: "No"
+  btn.restart: "Volver a empezar"
+  btn.retry: "Reintentar"
+  btn.lang_es: "Español"
+  btn.lang_pt: "Português"
+
+  # ---------------------------------------------------------------- queues (lane C) and time zones
+  # Without article: lane_c_handoff says "pasó al {queue}"; the case card shows the label alone.
+  queue.fraud: "equipo de Fraudes"
+  queue.disputes: "equipo de Reclamos de cargos"
+  queue.fees: "equipo de Comisiones"
+  queue.cards: "equipo de Tarjetas"
+  queue.priority: "equipo de Atención prioritaria"
+  queue.general: "equipo de Atención al cliente"
+  tz.MX: "hora del centro de México"
+  tz.CO: "hora de Colombia"
+  tz.AR: "hora de Argentina"
+  tz.UTC: "UTC"
+
+  # ---------------------------------------------------------------- orchestrator additions (2026-09-29)
+  confirm_duplicate:
+    tu: "Encontré este cargo {n} veces en tus movimientos, con minutos de diferencia: {charge}. ¿Es este?"
+    usted: "Encontré este cargo {n} veces en sus movimientos, con minutos de diferencia: {charge}. ¿Es este?"
+    vos: "Encontré este cargo {n} veces en tus movimientos, con minutos de diferencia: {charge}. ¿Es este?"
+  ask_resolved: "¿Con esto quedó resuelto?"
+  lane_a_closed: "Listo. Quedó registrado como resuelto en la conversación ({case_id})."
+  case_status_short:
+    tu: "Tu caso {case_id} está en estado «{status}»."
+    usted: "Su caso {case_id} está en estado «{status}»."
+    vos: "Tu caso {case_id} está en estado «{status}»."
+  btn.resolved_yes: "Sí, quedó resuelto"
+  btn.resolved_no: "No, sigue sin resolverse"
+  queue.regulator: "equipo de Asuntos regulatorios"
+  queue.complaints_es: "equipo de Reclamos"
+  queue.complaints_pt: "equipo de Reclamos en portugués"
+  queue.senior: "equipo de Revisión senior"
+  status.open: "abierto"
+  status.investigating: "en investigación"
+  status.awaiting_analyst: "en revisión"
+  status.notified: "notificado"
+  status.closed: "cerrado"
+  status.reopened: "reabierto"
+  status.resolved_in_contact: "resuelto en la conversación"
+  status.handed_off: "derivado a una persona"
+
+  # ---------------------------------------------------------------- review fixes (2026-09-28)
+  confirm_charge_uncertain:
+    tu: "Encontré este cargo parecido, aunque no coincide del todo con lo que me dijiste: {charge}. ¿Es este?"
+    usted: "Encontré este cargo parecido, aunque no coincide del todo con lo que me dijo: {charge}. ¿Es este?"
+    vos: "Encontré este cargo parecido, aunque no coincide del todo con lo que me dijiste: {charge}. ¿Es este?"
+  confirm_charge_other_merchant:
+    tu: "No encontré un cargo en ese comercio. El más parecido en tus movimientos es este, en otro comercio: {charge}. ¿Es este?"
+    usted: "No encontré un cargo en ese comercio. El más parecido en sus movimientos es este, en otro comercio: {charge}. ¿Es este?"
+    vos: "No encontré un cargo en ese comercio. El más parecido en tus movimientos es este, en otro comercio: {charge}. ¿Es este?"
+  lane_b_case_open_other:
+    tu: "Abrí el caso {case_id}. Una persona del equipo lo revisará y te dará una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}."
+    usted: "Abrí el caso {case_id}. Una persona del equipo lo revisará y le dará una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}."
+    vos: "Abrí el caso {case_id}. Una persona del equipo lo va a revisar y te va a dar una primera respuesta antes del {first_response_by}. Fecha estimada de resolución: {expected_date}."
+  case_note_added:
+    tu: "Lo agregué a tu caso {case_id}, así que la persona que lo atienda lo va a ver. No hace falta que lo repitas."
+    usted: "Lo agregué a su caso {case_id}, así que la persona que lo atienda lo va a ver. No hace falta que lo repita."
+    vos: "Lo agregué a tu caso {case_id}, así que la persona que lo atienda lo va a ver. No hace falta que lo repitas."
+  other_charge_after_case:
+    tu: "Eso parece otro reclamo, distinto del caso {case_id}, y no lo mezclé con ese caso. Si quieres, te comunico con una persona para revisarlo."
+    usted: "Eso parece otro reclamo, distinto del caso {case_id}, y no lo mezclé con ese caso. Si quiere, le comunico con una persona para revisarlo."
+    vos: "Eso parece otro reclamo, distinto del caso {case_id}, y no lo mezclé con ese caso. Si querés, te comunico con una persona para revisarlo."
+  side_request_noted:
+    tu: "Anoté en el caso {case_id} que quieres hablar con una persona sobre esa otra solicitud; la persona que revise el caso lo va a ver. Tu reclamo sigue igual."
+    usted: "Anoté en el caso {case_id} que quiere hablar con una persona sobre esa otra solicitud; la persona que revise el caso lo va a ver. Su reclamo sigue igual."
+    vos: "Anoté en el caso {case_id} que querés hablar con una persona sobre esa otra solicitud; la persona que revise el caso lo va a ver. Tu reclamo sigue igual."
+  block_use_button:
+    tu: "Para bloquear la tarjeta necesito que lo confirmes con el botón; un mensaje escrito no la bloquea."
+    usted: "Para bloquear la tarjeta necesito que lo confirme con el botón; un mensaje escrito no la bloquea."
+    vos: "Para bloquear la tarjeta necesito que lo confirmes con el botón; un mensaje escrito no la bloquea."
+  block_unavailable:
+    tu: "Lamento lo de tu tarjeta. Ahora no pude consultar tus tarjetas, así que no la bloqueé: la persona que tome tu caso lo hará contigo."
+    usted: "Lamento lo de su tarjeta. Ahora no pude consultar sus tarjetas, así que no la bloqueé: la persona que tome su caso lo hará con usted."
+    vos: "Lamento lo de tu tarjeta. Ahora no pude consultar tus tarjetas, así que no la bloqueé: la persona que tome tu caso lo va a hacer con vos."
+  lost_card_noted:
+    tu: "Anoté lo de tu tarjeta en el caso {case_id}; la persona que lo atienda lo va a ver."
+    usted: "Anoté lo de su tarjeta en el caso {case_id}; la persona que lo atienda lo va a ver."
+    vos: "Anoté lo de tu tarjeta en el caso {case_id}; la persona que lo atienda lo va a ver."
+
+  # ---------------------------------------------------------------- console and switches (2026-09-29)
+  # Contract in docs/contrato_consola.md. resolution_stamp closes every reply sent after an
+  # analyst decided (CaseResolution.text); the switch texts answer a switches-only /chat.
+  resolution_stamp: "Respuesta aprobada por una persona del equipo. En esta demo ningún dinero se mueve."
+  request_information_default:
+    tu: "Para avanzar con tu caso {case_id} necesitamos un dato más. Respóndenos por este chat y lo agregamos a tu caso."
+    usted: "Para avanzar con su caso {case_id} necesitamos un dato más. Respóndanos por este chat y lo agregamos a su caso."
+    vos: "Para avanzar con tu caso {case_id} necesitamos un dato más. Respondenos por este chat y lo agregamos a tu caso."
+  # The customer answered a request for information, disagreed with an answer, or asked how
+  # the case goes while the team waits for their answer (CX-01, H1, H6).
+  case_info_added:
+    tu: "Gracias. Agregué tu respuesta al caso {case_id} y una persona del equipo la va a revisar. Te escribimos por este canal."
+    usted: "Gracias. Agregué su respuesta al caso {case_id} y una persona del equipo la va a revisar. Le escribimos por este canal."
+    vos: "Gracias. Agregué tu respuesta al caso {case_id} y una persona del equipo la va a revisar. Te escribimos por este canal."
+  case_reopened:
+    tu: "Entendido. Reabrí tu caso {case_id} para que una persona del equipo revise de nuevo la respuesta, con prioridad. Te escribimos por este canal."
+    usted: "Entendido. Reabrí su caso {case_id} para que una persona del equipo revise de nuevo la respuesta, con prioridad. Le escribimos por este canal."
+    vos: "Entendido. Reabrí tu caso {case_id} para que una persona del equipo revise de nuevo la respuesta, con prioridad. Te escribimos por este canal."
+  case_awaiting_answer:
+    tu: "Estamos esperando tu respuesta a la pregunta del equipo: escríbela aquí y la agrego al caso."
+    usted: "Estamos esperando su respuesta a la pregunta del equipo: escríbala aquí y la agrego al caso."
+    vos: "Estamos esperando tu respuesta a la pregunta del equipo: escribila acá y la agrego al caso."
+  switch.tools_down_on: "Modo juez: herramientas de datos caídas para esta sesión (simulado)."
+  switch.tools_down_off: "Modo juez: herramientas de datos restablecidas para esta sesión."
+  switch.model_slow_on: "Modo juez: modelo lento para esta sesión (simulado); responden las plantillas."
+  switch.model_slow_off: "Modo juez: modelo restablecido para esta sesión."
+  # {day}: what one simulated day lasts with the server's LOCAL_SLA_SCALE (app.py, format_duration).
+  switch.fast_clock_on: "Modo juez: reloj acelerado para los casos de esta sesión (simulado: 1 día = {day}). Las fechas prometidas no cambian."
+  switch.fast_clock_on_neutral: "Modo juez: reloj acelerado para los casos de esta sesión (simulado). Las fechas prometidas no cambian."
+  switch.fast_clock_off: "Modo juez: reloj real para los casos de esta sesión."
+  # Proactive notices of the SLA timers (lifecycle.py): 80 % of the SLA elapsed, and the
+  # automatic escalation after the SLA is breached. They repeat the promised date and never
+  # promise an outcome.
+  sla_notice.sla_80:
+    tu: "Seguimos trabajando en tu caso {case_id}. Todavía no tenemos una respuesta final; la fecha estimada sigue siendo el {expected_date} y te escribiremos por este canal en cuanto haya novedades."
+    usted: "Seguimos trabajando en su caso {case_id}. Todavía no tenemos una respuesta final; la fecha estimada sigue siendo el {expected_date} y le escribiremos por este canal en cuanto haya novedades."
+    vos: "Seguimos trabajando en tu caso {case_id}. Todavía no tenemos una respuesta final; la fecha estimada sigue siendo el {expected_date} y te vamos a escribir por este canal en cuanto haya novedades."
+  sla_notice.escalated:
+    tu: "Tu caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. La fecha estimada sigue siendo el {expected_date}; te escribiremos por este canal."
+    usted: "Su caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. La fecha estimada sigue siendo el {expected_date}; le escribiremos por este canal."
+    vos: "Tu caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. La fecha estimada sigue siendo el {expected_date}; te vamos a escribir por este canal."
+  # The promised date was before the moment of the notice (e.g. a p90 shorter than the SLA):
+  # no "sigue siendo el <fecha pasada>"; say it passed and repeat no date (lifecycle._notice).
+  sla_notice.sla_80_date_passed:
+    tu: "Seguimos trabajando en tu caso {case_id}. Ya pasó la fecha estimada que te dimos y todavía no tenemos una respuesta final; te escribiremos por este canal en cuanto haya novedades."
+    usted: "Seguimos trabajando en su caso {case_id}. Ya pasó la fecha estimada que le dimos y todavía no tenemos una respuesta final; le escribiremos por este canal en cuanto haya novedades."
+    vos: "Seguimos trabajando en tu caso {case_id}. Ya pasó la fecha estimada que te dimos y todavía no tenemos una respuesta final; te vamos a escribir por este canal en cuanto haya novedades."
+  sla_notice.escalated_date_passed:
+    tu: "Tu caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. Ya pasó la fecha estimada que te dimos; te escribiremos por este canal en cuanto haya novedades."
+    usted: "Su caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. Ya pasó la fecha estimada que le dimos; le escribiremos por este canal en cuanto haya novedades."
+    vos: "Tu caso {case_id} está tardando más de lo previsto, así que lo pasamos a un equipo senior con prioridad alta. Ya pasó la fecha estimada que te dimos; te vamos a escribir por este canal en cuanto haya novedades."
+
+  # ---------------------------------------------------------------- console backend (30 sep)
+  # resolution_intro opens the next chat reply after an analyst decided (the resolution text
+  # follows, already stamped). investigator.draft.* are the drafts of the PROVISIONAL
+  # deterministic investigator (investigator_stub.py, until Andrés's G2): they describe what the
+  # record shows and the proposed next step; they never promise money back. A person approves,
+  # edits or rejects them before anything reaches the customer.
+  resolution_intro:
+    tu: "Novedades de tu caso {case_id}:"
+    usted: "Novedades de su caso {case_id}:"
+    vos: "Novedades de tu caso {case_id}:"
+  investigator.no_date: "la fecha estimada del caso"
+  investigator.draft.duplicate_not_reversed:
+    tu: "Revisamos tu caso {case_id}: hay dos cargos iguales de {amount} en {merchant} el {date}, con minutos de diferencia, y ninguno tiene reverso registrado. El paso propuesto es abrir una disputa con el comercio por el cargo repetido. Te avisaremos el resultado antes del {expected_date}."
+    usted: "Revisamos su caso {case_id}: hay dos cargos iguales de {amount} en {merchant} el {date}, con minutos de diferencia, y ninguno tiene reverso registrado. El paso propuesto es abrir una disputa con el comercio por el cargo repetido. Le avisaremos el resultado antes del {expected_date}."
+    vos: "Revisamos tu caso {case_id}: hay dos cargos iguales de {amount} en {merchant} el {date}, con minutos de diferencia, y ninguno tiene reverso registrado. El paso propuesto es abrir una disputa con el comercio por el cargo repetido. Te vamos a avisar el resultado antes del {expected_date}."
+  investigator.draft.fee_off_schedule:
+    tu: "Revisamos tu caso {case_id}: la comisión «{fee_name}» del {date} se cobró por {amount} y la tarifa vigente de tu producto es {fee_amount}. El paso propuesto es corregir la comisión según la tarifa vigente. Te avisaremos el resultado antes del {expected_date}."
+    usted: "Revisamos su caso {case_id}: la comisión «{fee_name}» del {date} se cobró por {amount} y la tarifa vigente de su producto es {fee_amount}. El paso propuesto es corregir la comisión según la tarifa vigente. Le avisaremos el resultado antes del {expected_date}."
+    vos: "Revisamos tu caso {case_id}: la comisión «{fee_name}» del {date} se cobró por {amount} y la tarifa vigente de tu producto es {fee_amount}. El paso propuesto es corregir la comisión según la tarifa vigente. Te vamos a avisar el resultado antes del {expected_date}."
+  investigator.draft.purchase_amount_disputed:
+    tu: "Revisamos tu caso {case_id}: el cargo de {merchant} del {date} está registrado por {amount}. Para seguir necesitamos el comprobante de la compra o el monto que esperabas pagar; puedes enviarlo respondiendo por este canal."
+    usted: "Revisamos su caso {case_id}: el cargo de {merchant} del {date} está registrado por {amount}. Para seguir necesitamos el comprobante de la compra o el monto que esperaba pagar; puede enviarlo respondiendo por este canal."
+    vos: "Revisamos tu caso {case_id}: el cargo de {merchant} del {date} está registrado por {amount}. Para seguir necesitamos el comprobante de la compra o el monto que esperabas pagar; podés enviarlo respondiendo por este canal."
+  investigator.draft.unrecognized_new_merchant:
+    tu: "Revisamos tu caso {case_id}: el cargo de {amount} en {merchant} del {date} es el primero en ese comercio en los últimos 90 días. El paso propuesto es abrir una disputa con el comercio por ese cargo. Te avisaremos el resultado antes del {expected_date}."
+    usted: "Revisamos su caso {case_id}: el cargo de {amount} en {merchant} del {date} es el primero en ese comercio en los últimos 90 días. El paso propuesto es abrir una disputa con el comercio por ese cargo. Le avisaremos el resultado antes del {expected_date}."
+    vos: "Revisamos tu caso {case_id}: el cargo de {amount} en {merchant} del {date} es el primero en ese comercio en los últimos 90 días. El paso propuesto es abrir una disputa con el comercio por ese cargo. Te vamos a avisar el resultado antes del {expected_date}."
+  investigator.draft.unrecognized_known_merchant:
+    tu: "Revisamos tu caso {case_id}: el cargo de {amount} en {merchant} del {date} se parece a compras anteriores tuyas en ese comercio. Para seguir necesitamos saber si alguien más usa tu tarjeta o si tienes el comprobante; puedes responder por este canal."
+    usted: "Revisamos su caso {case_id}: el cargo de {amount} en {merchant} del {date} se parece a compras anteriores suyas en ese comercio. Para seguir necesitamos saber si alguien más usa su tarjeta o si tiene el comprobante; puede responder por este canal."
+    vos: "Revisamos tu caso {case_id}: el cargo de {amount} en {merchant} del {date} se parece a compras anteriores tuyas en ese comercio. Para seguir necesitamos saber si alguien más usa tu tarjeta o si tenés el comprobante; podés responder por este canal."
+  investigator.draft.explained:
+    tu: "Revisamos tu caso {case_id} sobre el cargo de {amount} en {merchant} del {date}, y el registro lo explica. Si algo no te cuadra, responde por este canal y una persona lo vuelve a revisar."
+    usted: "Revisamos su caso {case_id} sobre el cargo de {amount} en {merchant} del {date}, y el registro lo explica. Si algo no le cuadra, responda por este canal y una persona lo vuelve a revisar."
+    vos: "Revisamos tu caso {case_id} sobre el cargo de {amount} en {merchant} del {date}, y el registro lo explica. Si algo no te cierra, respondé por este canal y una persona lo vuelve a revisar."
+  investigator.draft.generic:
+    tu: "Revisamos tu caso {case_id}. Una persona del equipo sigue con la revisión y te avisaremos el resultado antes del {expected_date}."
+    usted: "Revisamos su caso {case_id}. Una persona del equipo sigue con la revisión y le avisaremos el resultado antes del {expected_date}."
+    vos: "Revisamos tu caso {case_id}. Una persona del equipo sigue con la revisión y te vamos a avisar el resultado antes del {expected_date}."

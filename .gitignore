@@ -39,3 +39,13 @@ infra/cdk.out/
 !infra/cdk.json
 !infra/cdk.context.json
 node_modules/
+
+# Front (frontend/, React + Vite): manifests and config that must be versioned.
+# Must come after *.json so the exception wins. dist/ and node_modules/ stay ignored
+# (frontend/.gitignore).
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json
+!frontend/tsconfig.app.json
+!frontend/tsconfig.node.json
+!frontend/.oxlintrc.json

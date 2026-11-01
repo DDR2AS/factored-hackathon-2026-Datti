@@ -1,0 +1,69 @@
+# SINTÉTICO. Fixtures de G1 (mock) para Sofía (cliente demo, es-CO). "lucas" = miles (jerga).
+# Formato y reglas: ver lucia.yaml.
+synthetic: true
+prompt_id: g1_extract
+customer: sofia
+language: es
+reference_date: 2026-06-16
+cases:
+  - id: sofia-s1
+    kind: suggestion
+    text: "Buenas, me cobraron algo raro"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: sofia-s2
+    kind: suggestion
+    text: "Fueron como 52 mil de un domicilio el 9"
+    output:
+      slots: {amount: "52000", currency: null, date: "2026-06-09", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: null
+  - id: sofia-s3
+    kind: suggestion
+    text: "Y de paso, quisiera pedir un préstamo"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: null
+  - id: sofia-v1
+    kind: variant
+    text: "El martes pasado me cobraron un domicilio de cincuenta y dos mil pesos que no pedí"
+    beats_regex: [date]
+    output:
+      slots: {amount: "52000", currency: null, date: "2026-06-09", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: sofia-v2
+    kind: variant
+    text: "me sacaron 52.000 por un pedido de Rappi que nunca llegó ni pedí"
+    beats_regex: [merchant_text, complaint_type]
+    output:
+      slots: {amount: "52000", currency: null, date: null, date_is_relative: null, merchant_text: "Rappi", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: sofia-v3
+    kind: variant
+    text: "El lunes 8 pedí por la app de Didi y me cobraron algo que no reconozco"
+    beats_regex: [amount, date, merchant_text]
+    output:
+      slots: {amount: null, currency: null, date: "2026-06-08", date_is_relative: true, merchant_text: "Didi", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: sofia-v4
+    kind: variant
+    text: "me llegó un cargo de 51 mil 500 de un restaurante por Rappi"
+    beats_regex: [amount, merchant_text]
+    output:
+      slots: {amount: "51500", currency: null, date: null, date_is_relative: null, merchant_text: "Rappi", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: sofia-v5
+    kind: variant
+    text: "hace una semana más o menos me descontaron cincuenta y dos lucas de la tarjeta débito"
+    beats_regex: [amount]
+    output:
+      slots: {amount: "52000", currency: null, date: "2026-06-09", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge

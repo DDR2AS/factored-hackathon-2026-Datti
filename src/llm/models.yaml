@@ -1,0 +1,74 @@
+# Configuración del cliente #8 (src/llm). Los model IDs del código viven SOLO aquí y en
+# prices.yaml (en la nube, en infra/cdk.json); ningún llamador escribe un model ID (INTERFACES #8).
+#
+# Model ID de cada rol, en este orden:
+#   1. MODEL_CHAT / MODEL_INVESTIGATOR / MODEL_JUDGE (la CDK los pone en AWS con el prefijo
+#      "anthropic." de Bedrock: infra/stacks/common.py::model_environment).
+#   2. defaults.<proveedor>.<rol> de este archivo.
+# El cliente ajusta el prefijo: con LLM_PROVIDER=anthropic lo quita (la API de Anthropic usa el
+# ID sin prefijo); con LLM_PROVIDER=bedrock lo agrega si falta.
+#
+# D5 (DECISIONS.md): chat = Haiku 4.5, investigador = Sonnet 5, juez = Opus 5.
+# Existe una generación 5.5 más nueva y más barata (Haiku 5.5 a 0,10/0,50 USD por millón de
+# tokens; Sonnet 5.5 a 2/10; Opus 5.5 a 4/20; ver prices.yaml). Cambiar es solo configuración
+# (MODEL_* en infra/cdk.json o estos defaults) y lo decide el equipo: D5 sigue como se decidió.
+# Si se cambia: los modelos 5.5 rechazan tool_choice forzado y thinking {type: disabled}; este
+# cliente no usa ninguno de los dos, salvo que alguien ponga thinking aquí abajo.
+version: "2026-10-29.1"
+
+defaults:
+  anthropic:
+    chat: claude-haiku-4-5
+    investigator: claude-sonnet-5
+    judge: claude-opus-5
+  bedrock:
+    chat: anthropic.claude-haiku-4-5
+    investigator: anthropic.claude-sonnet-5
+    judge: anthropic.claude-opus-5
+
+bedrock:
+  default_region: us-east-2   # si AWS_REGION no está definida (D6). Lambda siempre la define.
+
+# Por rol. max_retries = reintentos del SDK (429, 5xx, errores de conexión y timeouts), con
+# backoff; después, ProviderUnavailable (o TimeoutError). timeout_seconds es por intento.
+# effort: null = no se envía (default de la API). thinking: null = no se envía (Sonnet 5 y
+# Opus 5 piensan en modo adaptive por defecto). Ambos se envían SOLO a modelos que en
+# capabilities los aceptan: a Haiku 4.5 nunca.
+roles:
+  chat:                 # G1: extracción con esquema, una llamada por turno
+    model_env: MODEL_CHAT
+    max_tokens: 1024
+    timeout_seconds: 8
+    timeout_env: LLM_TIMEOUT_SECONDS   # si está definida (#9), reemplaza timeout_seconds
+    max_retries: 1
+    effort: null
+    thinking: null
+  investigator:         # G2: cada llamada del loop de herramientas (converse)
+    model_env: MODEL_INVESTIGATOR
+    max_tokens: 8192
+    timeout_seconds: 30
+    max_retries: 2
+    effort: null
+    thinking: null
+  judge:                # G3: evaluación offline
+    model_env: MODEL_JUDGE
+    max_tokens: 16000
+    timeout_seconds: 120
+    max_retries: 2
+    effort: null
+    thinking: null
+
+# Parámetros que acepta cada modelo (clave: ID sin el prefijo "anthropic."). Un modelo que no
+# está aquí no recibe effort ni thinking (lo seguro).
+capabilities:
+  claude-haiku-4-5: {effort: false, thinking: false}
+  claude-sonnet-5: {effort: true, thinking: true}
+  claude-opus-5: {effort: true, thinking: true}
+  claude-haiku-5-5: {effort: true, thinking: true}
+  claude-sonnet-5-5: {effort: true, thinking: true}
+  claude-opus-5-5: {effort: true, thinking: true}
+
+# Segundos sin volver a intentar un proveedor después de un error de credenciales o de permisos
+# (sin credenciales, 401, 403): cada llamada falla al instante con ProviderUnavailable en vez de
+# esperar otra vez. llm.reset_clients() lo limpia.
+unavailable_backoff_seconds: 60

@@ -34,6 +34,13 @@ class WorkflowStack(cdk.Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         environment = {**data.table_environment(), **model_environment(cfg)}
+        state_machine_name = cfg.name("case-lifecycle")
+        # Built from the name (not the construct) so the case-steps role can answer task tokens
+        # without a circular reference between the function and the state machine that invokes it.
+        state_machine_arn = cdk.Stack.of(self).format_arn(
+            service="states", resource="stateMachine", resource_name=state_machine_name,
+            arn_format=cdk.ArnFormat.COLON_RESOURCE_NAME,
+        )
 
         self.investigator = python_function(
             self,
@@ -47,10 +54,10 @@ class WorkflowStack(cdk.Stack):
             environment={**environment, "INVESTIGATOR_MAX_TOOL_CALLS": "12"},
         )
         data.serving.grant_read_data(self.investigator)
-        data.cases.grant_read_write_data(self.investigator)
+        data.cases.grant_read_write_data(self.investigator)  # the case and its report (ReviewStore items)
         data.traces.grant_put(self.investigator)
         data.artifacts.grant_read(self.investigator)
-        allow_bedrock(self.investigator)
+        allow_bedrock(self.investigator, cfg)
 
         self.case_steps = python_function(
             self,
@@ -64,6 +71,13 @@ class WorkflowStack(cdk.Stack):
         )
         data.cases.grant_read_write_data(self.case_steps)
         data.traces.grant_put(self.case_steps)
+        # A retried AwaitAnalyst on a case already decided is answered at once (register_task_token).
+        self.case_steps.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"],
+                resources=[state_machine_arn],
+            )
+        )
 
         # --- SLA timers --------------------------------------------------------------------
         self.schedule_group_name = cfg.name("sla-timers")
@@ -102,25 +116,48 @@ class WorkflowStack(cdk.Stack):
         )
         investigate.add_retry(errors=_LAMBDA_TRANSIENT_ERRORS, max_attempts=2, backoff_rate=2)
 
-        mark_incomplete = step("MarkInvestigationIncomplete", "mark_incomplete")
+        # Contract with src/cloud/stepfunctions_lifecycle.py (the API starts executions named
+        # <case_id>-r<round> with input {case_id, money_dispute, round}).
+        mark_incomplete = step(
+            "MarkInvestigationIncomplete",
+            "mark_incomplete",
+            payload_extra={"error.$": "$.investigation_error.Error"},
+        )
         await_analyst = step(
             "AwaitAnalyst",
             "register_task_token",
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
-            payload_extra={"task_token": sfn.JsonPath.task_token},
+            payload_extra={
+                "task_token": sfn.JsonPath.task_token,
+                "execution_arn.$": "$$.Execution.Id",
+                "round.$": "$.round",
+            },
             payload_response_only=False,
-            result_path="$.decision",
+            result_path="$.decision",  # SendTaskSuccess output {action, next, status}
             task_timeout=sfn.Timeout.duration(cdk.Duration.days(30)),
         )
         notify_customer = step(
             "NotifyCustomer",
             "notify_customer",
             payload_extra={"decision.$": "$.decision"},
+            result_path="$.notify",  # {close, close_after_seconds}
+        )
+        close_case = step("CloseCase", "close_case")
+        wait_before_close = sfn.Wait(
+            self, "WaitBeforeClose", time=sfn.WaitTime.seconds_path("$.notify.close_after_seconds")
         )
         investigate.add_catch(mark_incomplete, result_path="$.investigation_error")
         mark_incomplete.next(await_analyst)
         investigate.next(await_analyst)
-        await_analyst.next(notify_customer).next(sfn.Succeed(self, "CaseClosed"))
+        await_analyst.next(notify_customer).next(
+            sfn.Choice(self, "CloseAfterNotice")
+            .when(
+                sfn.Condition.boolean_equals("$.notify.close", True),
+                wait_before_close.next(close_case).next(sfn.Succeed(self, "CaseClosed")),
+            )
+            # escalated (handed_off) or waiting for the customer's answer: people take it from here
+            .otherwise(sfn.Succeed(self, "LeftToPeople"))
+        )
 
         start = sfn.Choice(self, "MoneyDispute").when(
             sfn.Condition.boolean_equals("$.money_dispute", True), investigate
@@ -129,7 +166,7 @@ class WorkflowStack(cdk.Stack):
         self.state_machine = sfn.StateMachine(
             self,
             "CaseStateMachine",
-            state_machine_name=cfg.name("case-lifecycle"),
+            state_machine_name=state_machine_name,
             state_machine_type=sfn.StateMachineType.STANDARD,
             definition_body=sfn.DefinitionBody.from_chainable(start),
             timeout=cdk.Duration.days(60),

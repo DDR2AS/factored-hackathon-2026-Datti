@@ -1,0 +1,268 @@
+/* Evaluation view (#/evaluacion). Loaded with that view only (RNF-11). Colors, type and spacing
+   come from tokens.css; cards, tables, notices and tags from app.css, views.css and console.css.
+   Every state carries an icon and text; color only reinforces it. */
+
+.evalview {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: var(--s5) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.evalview__head {
+  display: grid;
+  gap: var(--s2);
+}
+
+.evalview__head h1 {
+  font-size: var(--fs-2xl);
+}
+
+.evalview__summary {
+  font-size: var(--fs-lg);
+  color: var(--text-2);
+}
+
+/* .notice is laid out for the chat (side margins); here it spans the column, and its text sits
+   beside the icon instead of wrapping under it on a phone. */
+.evalview .notice {
+  margin: 0;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.evalview .notice > strong {
+  flex: 1;
+  min-width: 0;
+}
+
+.evsection h2 {
+  margin-bottom: var(--s3);
+}
+
+.evsection h3 {
+  margin: var(--s4) 0 var(--s2);
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.evsection > h3:first-of-type,
+.evblock:first-of-type > h3 {
+  margin-top: 0;
+}
+
+.evblock + .evblock {
+  margin-top: var(--s4);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+}
+
+.evnote {
+  margin-bottom: var(--s3);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.evtable {
+  font-size: var(--fs-sm);
+}
+
+.evtable th[scope='row'] {
+  color: var(--text);
+  font-weight: 600;
+  white-space: normal;
+  min-width: 14ch;
+}
+
+/* Five columns of numbers and badges: on a phone the table scrolls inside .table-wrap. */
+.evtable--wide {
+  min-width: 36rem;
+}
+
+/* The scroll wrapper is the containing block of the .sr-only helpers in its cells ("sin dato"):
+   otherwise they sit past the phone's edge and the whole page scrolls sideways (as in the
+   console, console.css). */
+.evalview .table-wrap {
+  position: relative;
+}
+
+.evnum {
+  display: block;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.evsub {
+  display: block;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.evbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px var(--s2);
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.evbadge--pass {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+
+.evbadge--fail {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  border-color: var(--danger-border);
+}
+
+.evbadge--neutral {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.evbadge--na {
+  color: var(--text-2);
+}
+
+/* Latency and cost tiles */
+.evtiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--s3);
+}
+
+.evtile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.evtile dt {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.evtile__value {
+  display: block;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.evnotes {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--s3);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.evnotes strong {
+  color: var(--text);
+}
+
+/* The two fairness tables (six columns each) stack: side by side they would both scroll. The
+   track is minmax(0, 1fr) so a wide table scrolls in its .table-wrap instead of widening the
+   page on a phone (a grid item's min-width is its content's by default). */
+.evstack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+.evmeta {
+  margin-bottom: var(--s2);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.evpending {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.evfacts {
+  display: grid;
+  grid-template-columns: minmax(10rem, max-content) 1fr;
+  gap: 6px var(--s3);
+  font-size: var(--fs-sm);
+}
+
+.evfacts dt {
+  color: var(--text-2);
+}
+
+.evfacts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .evfacts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .evfacts dd + dt {
+    margin-top: var(--s2);
+  }
+}
+
+.evstatus {
+  display: grid;
+  gap: var(--s2);
+}
+
+.evstatus li {
+  display: grid;
+  gap: 4px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.evstatus__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.evstatus__note {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.evunavailable {
+  max-width: 560px;
+  display: grid;
+  gap: var(--s3);
+  justify-items: start;
+}
+
+@media (forced-colors: active) {
+  .evbadge,
+  .evtile {
+    border: 1px solid CanvasText;
+  }
+}

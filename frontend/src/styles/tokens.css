@@ -1,0 +1,178 @@
+/* Design tokens: LATAM Bank · demo (synthetic identity). One accent (deep teal), system fonts,
+   4 px spacing scale. Light by default; dark follows prefers-color-scheme.
+   Text colors are chosen for WCAG AA (>= 4.5:1) on their own surfaces. */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --surface-3: #eceff3;
+  --border: #dde3e9;
+  --border-strong: #c3ccd5;
+
+  /* Text */
+  --text: #16222c;
+  --text-2: #4b5b68;
+  --text-3: #5f6e7a;
+
+  /* Accent: deep teal */
+  --accent: #0b6e69;
+  --accent-hover: #095c58;
+  --accent-strong: #074643;
+  --accent-soft: #e2f1ef;
+  --accent-soft-border: #b5dcd7;
+  --on-accent: #ffffff;
+
+  /* Speakers */
+  --customer-bg: #0b6e69;
+  --customer-text: #ffffff;
+  --template-bg: #ffffff;
+  --template-border: #dde3e9;
+  --model-bg: #fff8ea;
+  --model-border: #ecd7a6;
+
+  /* Origin badges (text / background) */
+  --rule-fg: #24476e;
+  --rule-bg: #e5eef8;
+  --ml-fg: #0d5570;
+  --ml-bg: #dff1f8;
+  --genai-fg: #7a4600;
+  --genai-bg: #fcefd6;
+  --tool-fg: #25613a;
+  --tool-bg: #e3f3e7;
+  /* Approved by a person: its own indigo "seal", never the lane C pink nor danger red (CX-13). */
+  --human-fg: #3f3591;
+  --human-bg: #ecebfa;
+  --template-fg: #3f4c57;
+  --template-badge-bg: #eceff3;
+
+  /* Lanes */
+  --lane-a-fg: #1f6135;
+  --lane-a-bg: #e2f3e6;
+  --lane-b-fg: #7a4a00;
+  --lane-b-bg: #fdf0d5;
+  --lane-c-fg: #8c2346;
+  --lane-c-bg: #fbe6ec;
+
+  /* Status */
+  --ok-fg: #1f6135;
+  --ok-bg: #e2f3e6;
+  --warn-fg: #7a4a00;
+  --warn-bg: #fff4dc;
+  --warn-border: #efd49a;
+  --danger-fg: #b0261c;
+  --danger-bg: #fdecea;
+  --danger-border: #f3c1bb;
+
+  /* Verified vs unverified blocks */
+  --unverified-border: #c9a45a;
+  --unverified-bg: #fffbf2;
+  --verified-border: #0b6e69;
+  --verified-bg: #f2f9f8;
+
+  /* Type */
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', 'Segoe UI Mono', Consolas, 'Liberation Mono', monospace;
+  --fs-xs: 0.75rem; /* 12 */
+  --fs-sm: 0.8125rem; /* 13 */
+  --fs-md: 0.9375rem; /* 15 */
+  --fs-lg: 1.0625rem; /* 17 */
+  --fs-xl: 1.375rem; /* 22 */
+  --fs-2xl: 1.875rem; /* 30 */
+  --lh: 1.5;
+
+  /* Space (4 px scale) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Shape */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-phone: 28px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-2: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.04);
+  --shadow-phone: 0 12px 40px rgb(16 24 40 / 0.12), 0 2px 6px rgb(16 24 40 / 0.06);
+
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #0d1316;
+    --surface: #141c20;
+    --surface-2: #182227;
+    --surface-3: #1f2b31;
+    --border: #2a383f;
+    --border-strong: #3a4a52;
+
+    --text: #e5ecef;
+    --text-2: #aebbc2;
+    --text-3: #9aa8b0;
+
+    --accent: #4fc1b6;
+    --accent-hover: #6fd0c6;
+    --accent-strong: #9be3db;
+    --accent-soft: #15302e;
+    --accent-soft-border: #235450;
+    --on-accent: #062a27;
+
+    --customer-bg: #1a7c75;
+    --customer-text: #ffffff;
+    --template-bg: #182227;
+    --template-border: #2a383f;
+    --model-bg: #2a2314;
+    --model-border: #5a4822;
+
+    --rule-fg: #a9c8ee;
+    --rule-bg: #1b2a3c;
+    --ml-fg: #93d4ec;
+    --ml-bg: #14303b;
+    --genai-fg: #f3c778;
+    --genai-bg: #362a14;
+    --tool-fg: #9ed8ae;
+    --tool-bg: #173022;
+    --human-fg: #c3bdf4;
+    --human-bg: #242043;
+    --template-fg: #c3cdd3;
+    --template-badge-bg: #25323a;
+
+    --lane-a-fg: #9ed8ae;
+    --lane-a-bg: #173022;
+    --lane-b-fg: #f3c778;
+    --lane-b-bg: #362a14;
+    --lane-c-fg: #f2a7bd;
+    --lane-c-bg: #3a1a25;
+
+    --ok-fg: #9ed8ae;
+    --ok-bg: #173022;
+    --warn-fg: #f3c778;
+    --warn-bg: #2e2412;
+    --warn-border: #5a4822;
+    --danger-fg: #f5a39a;
+    --danger-bg: #3a1916;
+    --danger-border: #6b2c26;
+
+    --unverified-border: #9c7d3c;
+    --unverified-bg: #221d12;
+    --verified-border: #4fc1b6;
+    --verified-bg: #122624;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 4px 12px rgb(0 0 0 / 0.35);
+    --shadow-phone: 0 12px 40px rgb(0 0 0 / 0.5);
+  }
+}

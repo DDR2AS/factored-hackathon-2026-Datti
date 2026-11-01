@@ -1,0 +1,62 @@
+# SINTÉTICO. Fixtures de G1 (mock) para Martina (cliente demo, es-AR). "lucas" = miles (jerga).
+# Formato y reglas: ver lucia.yaml.
+synthetic: true
+prompt_id: g1_extract
+customer: martina
+language: es
+reference_date: 2026-06-15
+cases:
+  - id: martina-s1
+    kind: suggestion
+    text: "Me aparece un consumo rarísimo en la tarjeta, creo que me la clonaron"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: martina-s2
+    kind: suggestion
+    text: "Fueron 145 mil en ELECTRO MUNDO ONLINE el 15"
+    output:
+      slots: {amount: "145000", currency: null, date: "2026-06-15", date_is_relative: true, merchant_text: "ELECTRO MUNDO ONLINE", card_last4: null}
+      flags: {}
+      complaint_type: null
+  - id: martina-v1
+    kind: variant
+    text: "Hoy a la madrugada me llegó un aviso de compra por ciento cuarenta y cinco mil en una tienda online de electro"
+    beats_regex: [merchant_text]
+    output:
+      slots: {amount: "145000", currency: null, date: "2026-06-15", date_is_relative: true, merchant_text: "tienda online de electro", card_last4: null}
+      flags: {}
+      complaint_type: null
+  - id: martina-v2
+    kind: variant
+    text: "Me clonaron la tarjeta: 145 lucas en Electro Mundo"
+    beats_regex: [amount]
+    output:
+      slots: {amount: "145000", currency: null, date: null, date_is_relative: null, merchant_text: "Electro Mundo", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: martina-v3
+    kind: variant
+    text: "Esta madrugada alguien usó mi tarjeta en ELECTRO MUNDO ONLINE, yo estaba durmiendo"
+    beats_regex: [date, merchant_text, complaint_type]
+    output:
+      slots: {amount: null, currency: null, date: "2026-06-15", date_is_relative: true, merchant_text: "ELECTRO MUNDO ONLINE", card_last4: null}
+      flags: {}
+      complaint_type: unrecognized_charge
+  - id: martina-v4
+    kind: variant
+    text: "Me robaron los datos de la tarjeta terminada en siete siete tres cero y compraron en Electro Mundo"
+    beats_regex: [card_last4, merchant_text]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: "Electro Mundo", card_last4: "7730"}
+      flags: {lost_card: true}
+      complaint_type: unrecognized_charge
+  - id: martina-v5
+    kind: variant
+    text: "El lunes a la madrugada apareció un gasto de 145.000 que no reconozco, ¿me pueden pasar con alguien?"
+    beats_regex: [asks_for_human]
+    output:
+      slots: {amount: "145000", currency: null, date: "2026-06-15", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {asks_for_human: true}
+      complaint_type: unrecognized_charge

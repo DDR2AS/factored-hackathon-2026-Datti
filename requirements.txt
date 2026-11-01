@@ -5,3 +5,14 @@ pandas
 pyarrow
 openai
 pydantic
+PyYAML
+pytest
+# v2 pipeline, models and evaluation (versions tested on Python 3.12, Windows and the 3.11 CI)
+numpy>=2.0
+scipy>=1.13
+scikit-learn>=1.5
+lightgbm>=4.5
+# src/llm (Claude through the Anthropic API or Amazon Bedrock); the SDK reads credentials itself
+anthropic[bedrock]==2.3.0
+# tests of the cloud adapters (src/cloud): DynamoDB, S3, Step Functions and EventBridge Scheduler mocked offline
+moto[dynamodb,s3,stepfunctions,scheduler]>=5.1

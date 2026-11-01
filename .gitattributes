@@ -1,3 +1,7 @@
 # Preserve both sides' appended coordination entries when branches merge.
 STATUS.md merge=union
 DECISIONS.md merge=union
+
+# Model artifacts are read byte for byte: LightGBM's text model stores each tree's size in bytes, so a
+# line-ending conversion on checkout (core.autocrlf on Windows) corrupts it.
+src/models/artifacts/** -text

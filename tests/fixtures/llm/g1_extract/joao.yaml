@@ -1,0 +1,62 @@
+# SINTÉTICO. Fixtures de G1 (mock) para João (cliente demo, português; país AR, moeda ARS).
+# Formato y reglas: ver lucia.yaml.
+synthetic: true
+prompt_id: g1_extract
+customer: joao
+language: pt
+reference_date: 2026-06-15
+cases:
+  - id: joao-s1
+    kind: suggestion
+    text: "Oi, me cobraram uma tarifa que não bate com a tabela de vocês"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-s2
+    kind: suggestion
+    text: "Essa comissão do mês passado está errada, podem conferir?"
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-v1
+    kind: variant
+    text: "Ontem vi que a taxa de manutenção deste mês veio doze mil e quinhentos, sendo que era oito mil e novecentos"
+    beats_regex: [amount, date]
+    output:
+      slots: {amount: "12500", currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-v2
+    kind: variant
+    text: "Me cobraram 12.500 de comissão no dia primeiro, está acima da tabela"
+    beats_regex: [date, merchant_text]
+    output:
+      slots: {amount: "12500", currency: null, date: "2026-06-01", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-v3
+    kind: variant
+    text: "Semana passada entrou uma taxa de manutenção bem mais cara que o normal, uns doze mil e quinhentos"
+    beats_regex: [amount]
+    output:
+      slots: {amount: "12500", currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-v4
+    kind: variant
+    text: "A tarifa do cartão final três três zero sete veio mais alta que a tabela"
+    beats_regex: [card_last4]
+    output:
+      slots: {amount: null, currency: null, date: null, date_is_relative: null, merchant_text: null, card_last4: "3307"}
+      flags: {}
+      complaint_type: wrong_fee
+  - id: joao-v5
+    kind: variant
+    text: "Na segunda passada chegou uma cobrança de manutenção que eu não esperava"
+    beats_regex: [date, merchant_text]
+    output:
+      slots: {amount: null, currency: null, date: "2026-06-08", date_is_relative: true, merchant_text: null, card_last4: null}
+      flags: {}
+      complaint_type: wrong_fee
