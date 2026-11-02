@@ -56,22 +56,37 @@ def test_pipeline_runs_and_quality_has_no_failures(tiny):
     out = tiny["out"]
     assert out["data_source"] == "synthetic_replica"
     assert out["quality"]["fail"] == 0, out["quality"]
-    assert out["quality"]["checks"] >= 150
+    assert out["quality"]["checks"] == 194, out["quality"]
     for t in ("customer_profile", "transactions_enriched", "fee_schedule", "customer_baseline", "contact_history",
               "kpi_baseline", "digital_sessions", "merchant_stats"):
         assert out["gold"][t] > 0, t
     assert out["serving"]["items"] > 0
 
 
+PII_COLUMNS = {"document_number", "document_hash", "document_type_number", "email", "mobile_phone", "landline_phone",
+               "phone", "address", "street", "last_name", "full_name", "product_number", "card_number", "lat", "lon"}
+
+
 def test_gold_has_no_pii_columns(tiny):
+    """Every gold table (not four of them): no PII column by name, and no e-mail-looking value or
+    16-digit number inside any text column."""
     import duckdb
 
     con = duckdb.connect()
-    for t in ("customer_profile", "transactions_enriched", "customer_products", "contact_history"):
-        cols = {r[0] for r in con.execute(
-            f"DESCRIBE SELECT * FROM read_parquet('{(tiny['dir'] / 'gold' / t / 'data.parquet').as_posix()}')").fetchall()}
-        assert not cols & {"document_number", "document_hash", "email", "mobile_phone", "landline_phone", "address",
-                           "last_name", "product_number"}, (t, cols)
+    tables = sorted(p.parent.name for p in (tiny["dir"] / "gold").glob("*/data.parquet"))
+    assert len(tables) >= 14, tables
+    for t in tables:
+        path = (tiny["dir"] / "gold" / t / "data.parquet").as_posix()
+        desc = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{path}')").fetchall()
+        cols = {r[0] for r in desc}
+        assert not cols & PII_COLUMNS, (t, cols & PII_COLUMNS)
+        for name, ctype in ((r[0], r[1]) for r in desc):
+            if str(ctype).upper() != "VARCHAR":  # lists of text (VARCHAR[]) hold category names
+                continue
+            hits = con.execute(
+                f'SELECT count(*) FROM read_parquet(\'{path}\') WHERE "{name}" LIKE \'%@%\' '
+                f'OR regexp_matches("{name}", \'[0-9]{{16}}\')').fetchone()[0]
+            assert hits == 0, (t, name, hits)
 
 
 def test_run_partition_is_idempotent(tiny):

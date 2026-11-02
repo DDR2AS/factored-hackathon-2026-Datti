@@ -83,7 +83,7 @@ Never deploy `dev` or `prod` from a laptop without agreeing it with Andrés firs
 | --- | --- | --- |
 | `stage` | `dev` | Which copy of the system to build |
 | `models` | Haiku 4.5 / Sonnet 5 / Opus 5 | Bedrock model ID per role (`chat`, `investigator`, `judge`); confirm the exact IDs in the Bedrock console |
-| `bundle` | `false` | `true` installs `src/requirements-lambda.txt` (the pipeline Lambda: `src/cloud/requirements-pipeline.txt`) into the Lambda package: pip downloads Linux wheels locally, and only if that fails CDK uses the Docker build image |
+| `bundle` | `false` | `true` installs `src/requirements-lambda.txt` (the pipeline Lambda: `src/cloud/requirements-pipeline.txt`) into the Lambda package: pip downloads the Linux x86_64 / CPython 3.12 wheels locally (`manylinux_2_28`, `manylinux_2_17` or `manylinux2014`: what the python3.12 runtime, Amazon Linux 2023, loads; every pin needs a binary wheel for one of them), and only if that fails CDK uses the Docker build image |
 | `warmup` | `false` | `true` pings the API Lambda every 5 minutes (use during judging) |
 | `allowedOrigins` | `["*"]` | CORS origins for the HTTP API |
 | `alertEmail` | none | Email subscribed to alarms and the budget |

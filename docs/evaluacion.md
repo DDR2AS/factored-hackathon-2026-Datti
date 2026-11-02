@@ -1,6 +1,6 @@
 # Evaluación de Expediente Vivo v2
 
-Generado por `make eval` (`src/eval/`), versión `eval-2026-10-29.1`, 2026-10-30T05:34:51Z. Datos: **synthetic_replica** (réplica sintética del dataset: los números NO son del dataset de los organizadores).
+Generado por `make eval` (`src/eval/`), versión `eval-2026-10-29.1`, 2026-11-02T00:30:49Z. Datos: **synthetic_replica** (réplica sintética del dataset: los números NO son del dataset de los organizadores).
 
 **240 escenarios sembrados** sobre clientes y transacciones gold (36 adversarios), idiomas {'es': 115, 'pt': 125}, países {'AR': 54, 'CO': 79, 'MX': 107}. Cada uno corre de punta a punta por la misma app que el chat (orquestador, gateway, reglas, caso, ciclo de vida, investigador) con un cliente simulado. La misma tanda corre con v2 y con la versión v1.4 solo reglas (B1).
 
@@ -8,30 +8,30 @@ Generado por `make eval` (`src/eval/`), versión `eval-2026-10-29.1`, 2026-10-30
 
 | Métrica | v2 | B1 (v1.4 reglas) | Meta | ¿Cumple? |
 |---|---|---|---|---|
-| Resolución automática segura | 41.6% (79/190) [34.7–47.9] | 40.5% (77/190) [33.7–46.8] | >= 30% con 0 cierres incorrectos | sí |
-| Cierres incorrectos en ruta A | 0.0% (0/190) [0.0–0.0] | 0.0% (0/190) [0.0–0.0] | 0 | sí |
-| Contención (cerrado sin humano) | 41.6% (79/190) [34.7–47.9] | 40.5% (77/190) [33.7–46.8] | comparado con B1 | — |
-| Ruta correcta (A/B/C) | 100.0% (190/190) [100.0–100.0] | 99.0% (188/190) [97.4–100.0] | — | — |
-| Cargo correcto en el caso | 100.0% (163/163) [100.0–100.0] | 100.0% (161/161) [100.0–100.0] | — | — |
-| Derivaciones críticas omitidas | 0.0% (0/190) [0.0–0.0] | 0.0% (0/190) [0.0–0.0] | 0 | sí |
-| Derivaciones innecesarias | 0.0% (0/190) [0.0–0.0] | 1.1% (2/190) [0.0–2.6] | <= 10% | sí |
-| Paquete de derivación completo | 100.0% (62/62) [100.0–100.0] | 100.0% (64/64) [100.0–100.0] | 100% | sí |
-| Inseguro: cargo equivocado registrado | 0.0% (0/194) [0.0–0.0] | 0.0% (0/194) [0.0–0.0] | 0 | sí |
-| Inseguro: datos de otro cliente | 0.0% (0/240) [0.0–0.0] | 0.0% (0/240) [0.0–0.0] | 0 | sí |
-| Inseguro: acción por texto inyectado | 0.0% (0/24) [0.0–0.0] | 0.0% (0/24) [0.0–0.0] | 0 | sí |
-| Cargo equivocado propuesto como seguro | 0.0% (0/163) [0.0–0.0] | 0.0% (0/161) [0.0–0.0] | < 1% | sí |
-| Primer cargo propuesto directo y correcto | 92.0% (150/163) [87.7–95.7] | 93.8% (151/161) [90.1–97.5] | — | — |
-| Investigador: recomendación correcta | 98.0% (48/49) [93.9–100.0] | — | mejor que B1 (caso vacío) | — |
-| Investigador: citas válidas | 100.0% (63/63) [100.0–100.0] | — | 100% | sí |
-| Investigador: reportes con afirmaciones sin respaldo quitadas | 0.0% (0/63) [0.0–0.0] | — | — | — |
+| Resolución automática segura | 41.6% (79/190) [34.8–48.7] | 40.5% (77/190) [33.8–47.6] | >= 30% con 0 cierres incorrectos | sí |
+| Cierres incorrectos en ruta A | 0.0% (0/190) [0.0–2.0] | 0.0% (0/190) [0.0–2.0] | 0 | sí |
+| Contención (cerrado sin humano) | 41.6% (79/190) [34.8–48.7] | 40.5% (77/190) [33.8–47.6] | comparado con B1 | — |
+| Ruta correcta (A/B/C) | 100.0% (190/190) [98.0–100.0] | 99.0% (188/190) [96.2–99.7] | — | — |
+| Cargo correcto en el caso | 100.0% (163/163) [97.7–100.0] | 100.0% (161/161) [97.7–100.0] | — | — |
+| Derivaciones críticas omitidas | 0.0% (0/190) [0.0–2.0] | 0.0% (0/190) [0.0–2.0] | 0 | sí |
+| Derivaciones innecesarias | 0.0% (0/190) [0.0–2.0] | 1.1% (2/190) [0.3–3.8] | <= 10% | sí |
+| Paquete de derivación completo | 100.0% (62/62) [94.2–100.0] | 100.0% (64/64) [94.3–100.0] | 100% | sí |
+| Inseguro: cargo equivocado registrado | 0.0% (0/194) [0.0–1.9] | 0.0% (0/194) [0.0–1.9] | 0 | sí |
+| Inseguro: datos de otro cliente | 0.0% (0/240) [0.0–1.6] | 0.0% (0/240) [0.0–1.6] | 0 | sí |
+| Inseguro: acción por texto inyectado | 0.0% (0/24) [0.0–13.8] | 0.0% (0/24) [0.0–13.8] | 0 | sí |
+| Cargo equivocado propuesto como seguro | 0.0% (0/163) [0.0–2.3] | 0.0% (0/161) [0.0–2.3] | < 1% | sí |
+| Primer cargo propuesto directo y correcto | 92.0% (150/163) [86.8–95.3] | 93.8% (151/161) [88.9–96.6] | — | — |
+| Investigador: recomendación correcta | 98.0% (48/49) [89.3–99.6] | — | mejor que B1 (caso vacío) | — |
+| Investigador: citas válidas | 100.0% (63/63) [94.2–100.0] | — | 100% | sí |
+| Investigador: reportes con afirmaciones sin respaldo quitadas | 0.0% (0/63) [0.0–5.8] | — | — | — |
 
 ## Latencia y costo
 
-- Turno de chat: p50 21.9 ms, p95 117.1 ms (639 turnos). Meta: turno p95 < 6 s; investigador p95 < 90 s.
-- Investigador: p50 79 ms, p95 176.7 ms (63 casos).
+- Turno de chat: p50 12.2 ms, p95 48.0 ms (639 turnos). Meta: turno p95 < 6 s; investigador p95 < 90 s.
+- Investigador: p50 39 ms, p95 45.9 ms (63 casos).
 - medido en local, proceso único, sin red ni modelo real (G1 mock, G2 política determinista).
 - Costo medido por conversación: 0.0 USD (medido con el proveedor mock: no hay llamadas reales (G1 sin fixture usa reglas)).
-- Costo PROYECTADO: chat 0.00251 USD por conversación (claude-haiku-4-5), investigador 0.0609 USD por caso (claude-sonnet-5, 26% de las conversaciones); total 0.01849 USD por conversación. Meta: < 0.05 USD por conversación. PROYECCIÓN con precios de lista y tamaños de prompt medidos; sin prompt caching (cota alta).
+- Costo PROYECTADO: chat 0.00251 USD por conversación (claude-haiku-4-5), investigador 0.0609 USD por caso (claude-sonnet-5, 26% de las conversaciones); total 0.01849 USD por conversación. Meta: < 0.05 USD por conversación. PROYECCIÓN con precios de lista y tamaños de prompt medidos: un orden de magnitud (0.01 a 0.04 USD), no una cota. Supone 4 caracteres por token, sin razonamiento extendido (Sonnet 5 lo activa por defecto y lo factura como salida), sin reintentos y sin prompt caching.
 
 ## Equidad (v2)
 
@@ -78,9 +78,10 @@ La ruta esperada sale de las reglas aplicadas a la verdad sembrada de cada escen
 
 ## Pruebas de seguridad (v2)
 
-- Herramientas pidiendo registros de otro cliente: 0 fugas en 204 intentos.
-- Sesión vencida: 0 respuestas con datos en 3 intentos.
-- Caso de otra sesión: 0 fugas en 1 intentos.
+- Herramientas pidiendo registros de otro cliente: 0 fugas en 204 intentos (tasa de fuga IC 95 % hasta 1.8 %).
+- Sesión vencida: 0 respuestas con datos en 3 intentos (IC 95 % hasta 56.1 %: n pequeño, prueba poco por sí sola).
+- Caso de otra sesión: 0 fugas en 1 intentos (IC 95 % hasta 79.3 %).
+- Las sondas llaman al gateway y a la app en proceso, no por HTTP; la capa HTTP la cubren los tests de la API.
 - Herramienta caída: ruta C, degradado ['tool_unavailable'] (camino seguro).
 
 ## Modelos
@@ -120,6 +121,7 @@ Diferencia de macro-F1 (bootstrap pareado): [0.369–0.524]. Compuerta: acepta 7
 |---|---|---|---|
 | transactional_contact_share | 35.1% | 18,012 | Contactos transaccionales (saldo, movimientos) |
 | fraud_rule_precision | 100.0% | 260 | Precisión de la regla fraud_score > 30 |
+| complaint_contact_fcr | 43.6% | 3,050 | Contactos con motivo Queja resueltos en el primer contacto |
 | median_first_response_hours | 38.375 hours | 1,090 | Mediana de horas hasta la primera respuesta de un reclamo formal |
 | median_resolution_days | 15 days | 431 | Mediana de días hasta resolver un reclamo |
 | p90_resolution_days | 28 days | 431 | Percentil 90 de días hasta resolver |
@@ -127,7 +129,6 @@ Diferencia de macro-F1 (bootstrap pareado): [0.369–0.524]. Compuerta: acepta 7
 | complaints_with_amount_rate | 29.8% | 1,812 | Reclamos que llegan con un monto |
 | affected_product_foreign_rate | 100.0% | 1,199 | Reclamos cuyo producto afectado pertenece a otro cliente |
 | money_complaint_share | 40.6% | 1,812 | Reclamos de dinero (cargo no reconocido o cobro indebido) |
-| complaint_contact_fcr | 43.6% | 3,050 | Contactos con motivo Queja resueltos en el primer contacto |
 | fraud_rule_recall | 57.9% | 449 | Fraudes que la regla fraud_score > 30 detecta |
 | complaint_contact_csat | 2.4288 score_1_5 | 534 | CSAT medio de los contactos por queja |
 

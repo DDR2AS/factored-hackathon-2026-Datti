@@ -130,16 +130,23 @@ export function JudgePanel({
             const wanted = staged ? !!pendingSwitches[sw.key] : server
             return (
               <li key={sw.key} className="switch">
-                <label className="switch__label">
+                {/* The name is explicit besides the wrapping label: aria-labelledby ties it to the
+                    visible text and aria-label (same text) covers readers that only look there;
+                    some accessibility trees showed the switch as "on" (its value) without them
+                    (review of 1 nov). */}
+                <label className="switch__label" htmlFor={`sw-${sw.key}`}>
                   <input
+                    id={`sw-${sw.key}`}
                     type="checkbox"
                     role="switch"
                     checked={wanted}
                     disabled={!onToggleSwitch}
                     onChange={(e) => onToggleSwitch?.(sw.key, e.target.checked)}
+                    aria-label={label(sw)}
+                    aria-labelledby={`sw-${sw.key}-label`}
                     aria-describedby={`sw-${sw.key}-state`}
                   />
-                  <span>{label(sw)}</span>
+                  <span id={`sw-${sw.key}-label`}>{label(sw)}</span>
                 </label>
                 <p className="muted small">{hint(sw)}</p>
                 {sw.key === 'fast_clock' && <ClockSchedule scale={clockScale} />}

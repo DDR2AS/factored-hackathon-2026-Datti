@@ -7,6 +7,7 @@ can run them before opening a pull request.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -241,3 +242,90 @@ def test_pipeline_runs_partitions_then_one_gold_step(dev):
     assert fn["EphemeralStorage"]["Size"] >= 2048
     assert fn["Environment"]["Variables"]["DATA_DIR"] == "/tmp/data"
     assert fn["Environment"]["Variables"]["RAW_PREFIX"] == "data/"
+
+
+# ---------------------------------------------------------------- review fixes (1 nov)
+
+def test_lambda_wheels_target_the_runtime_platform():
+    """The local bundler (no Docker) asks pip for wheels the python3.12 runtime (Amazon Linux
+    2023, glibc 2.34) loads; duckdb and pandas only publish manylinux_2_28 ones. DuckDB belongs to
+    the pipeline package only: in the cloud the API reads the DynamoDB serving table."""
+    from stacks.common import (
+        API_REQUIREMENTS, LAMBDA_WHEEL_PLATFORMS, PIPELINE_REQUIREMENTS, SRC_DIR, pip_install_command,
+    )
+
+    assert LAMBDA_WHEEL_PLATFORMS[0] == "manylinux_2_28_x86_64"
+    assert "manylinux2014_x86_64" in LAMBDA_WHEEL_PLATFORMS  # pydantic-core only publishes 2_17/2014
+    command = pip_install_command(API_REQUIREMENTS, "out")
+    assert "--only-binary=:all:" in command
+    assert [command[i + 1] for i, arg in enumerate(command) if arg == "--platform"] == list(LAMBDA_WHEEL_PLATFORMS)
+    assert command[command.index("--python-version") + 1] == "3.12"
+    assert command[-1].endswith(API_REQUIREMENTS)
+    api = (SRC_DIR / API_REQUIREMENTS).read_text(encoding="utf-8")
+    pipeline = (SRC_DIR / PIPELINE_REQUIREMENTS).read_text(encoding="utf-8")
+    assert not re.search(r"^duckdb", api, re.M)
+    assert re.search(r"^duckdb==", pipeline, re.M) and re.search(r"^pandas==", pipeline, re.M)
+
+
+def test_functions_run_on_python312(dev):
+    for key in ("pipeline", "workflow", "api"):
+        for function in dev[key].find_resources("AWS::Lambda::Function").values():
+            if isinstance(function["Properties"].get("FunctionName"), str):
+                assert function["Properties"]["Runtime"] == "python3.12"
+
+
+def test_api_behavior_forwards_authorization(dev):
+    """CloudFront forwards Authorization on GET only when the cache policy carries it: the session
+    header of GET /cases/{id} and the JWT of every /analyst/* call."""
+    policies = dev["web"].find_resources("AWS::CloudFront::CachePolicy")
+    assert len(policies) == 1
+    ((policy_id, policy),) = policies.items()
+    config = policy["Properties"]["CachePolicyConfig"]
+    headers = config["ParametersInCacheKeyAndForwardedToOrigin"]["HeadersConfig"]
+    assert headers["HeaderBehavior"] == "whitelist"
+    assert {"Authorization", "x-ev-session", "Content-Type"} <= set(headers["Headers"])
+    assert config["MinTTL"] == 0 and config["DefaultTTL"] == 0 and config["MaxTTL"] <= 1
+    distribution = next(iter(dev["web"].find_resources("AWS::CloudFront::Distribution").values()))
+    behaviors = distribution["Properties"]["DistributionConfig"]["CacheBehaviors"]
+    api_behavior = next(b for b in behaviors if b["PathPattern"] == "/api/*")
+    assert api_behavior["CachePolicyId"] == {"Ref": policy_id}
+    assert "OriginRequestPolicyId" in api_behavior  # the rest of the viewer request still goes through
+
+
+def test_analyst_client_allows_password_sign_in(dev):
+    """The console signs in with InitiateAuth USER_PASSWORD_AUTH (frontend/src/console/auth.ts)."""
+    dev["api"].has_resource_properties(
+        "AWS::Cognito::UserPoolClient",
+        {
+            "ExplicitAuthFlows": Match.array_with(["ALLOW_USER_PASSWORD_AUTH", "ALLOW_USER_SRP_AUTH"]),
+            "GenerateSecret": False,  # a browser client cannot keep a secret
+        },
+    )
+
+
+def test_site_publishes_the_cognito_config(dev):
+    """/config.json next to the site carries the pool ids of the Api stack (deploy-time markers)."""
+    deployment = next(iter(dev["web"].find_resources("Custom::CDKBucketDeployment").values()))["Properties"]
+    assert len(deployment["SourceObjectKeys"]) == 2  # the site and config.json
+    site_markers, config_markers = deployment["SourceMarkers"]
+    assert site_markers == {}
+    rendered = json.dumps(config_markers)
+    assert len(config_markers) == 2 and "ExpVivo-dev-Api:ExportsOutputRefAnalysts" in rendered
+
+
+def test_task_token_answers_are_not_resource_scoped(dev):
+    """SendTaskSuccess/Failure/Heartbeat take no resource-level permission: with a state machine
+    ARN as Resource the call is denied."""
+    for key in ("api", "workflow"):
+        statements = [
+            statement
+            for policy in dev[key].find_resources("AWS::IAM::Policy").values()
+            for statement in policy["Properties"]["PolicyDocument"]["Statement"]
+            if any(action.startswith("states:SendTask") for action in (
+                statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
+            ))
+        ]
+        assert statements, key
+        for statement in statements:
+            assert statement["Resource"] == "*", (key, statement)
+            assert set(statement["Action"]) == {"states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"}

@@ -1,7 +1,8 @@
 # Pipeline Lambda only (infra/stacks/pipeline_stack.py, installed with -c bundle=true; boto3 is in
 # the runtime). pipeline.run imports pandas through pipeline.quality. pyarrow is NOT here: only the
 # quality report needs it and it would push the package past Lambda's 250 MB, so the quality step
-# runs with `make pipeline` (locally or in CI), not in the Lambda.
+# runs with `make pipeline` (locally or in CI), not in the Lambda. Both pins publish manylinux_2_28
+# x86_64 wheels for CPython 3.12, the platform the local bundler asks pip for (common.py).
 duckdb==2.0.0
 pandas==3.1.0
 PyYAML==6.0.3

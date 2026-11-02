@@ -5,7 +5,9 @@
   "transactions tool down" switch). The analyst console is never affected by a session switch.
 - Card blocks of the simulated core: per (session, card) so two judges using the same demo
   customer don't see each other's blocks. A card blocked with the customer's yes stays blocked
-  when the session ends. There is no unblock. Nothing here moves money.
+  for the rest of that session; a NEW session of the same demo customer starts with the card
+  active again (judge isolation), so there is no unblock to simulate. A real core would block
+  per card, not per session. Nothing here moves money.
 """
 
 from __future__ import annotations

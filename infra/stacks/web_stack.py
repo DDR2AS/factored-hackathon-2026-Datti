@@ -60,6 +60,28 @@ class WebStack(cdk.Stack):
         # api_endpoint looks like https://abc123.execute-api.us-east-2.amazonaws.com
         api_domain = cdk.Fn.select(2, cdk.Fn.split("/", api.http_api.api_endpoint))
 
+        # CloudFront forwards Authorization on GET/HEAD only when the cache policy carries it, and
+        # CACHING_DISABLED carries no header: GET /cases/{id} (session as `Authorization: Bearer`,
+        # frontend/src/api/config.ts) and every /analyst/* call (the JWT authorizer reads that
+        # header) would arrive without a token. This policy keys on the headers the API reads
+        # (x-ev-session is the client's plan B header) plus the query string, with TTLs that keep
+        # nothing cached (CDK wants min <= default <= max). The origin request policy still forwards
+        # the rest of the viewer request.
+        api_cache_policy = cloudfront.CachePolicy(
+            self,
+            "ApiCachePolicy",
+            cache_policy_name=cfg.name("api-forward-auth"),
+            comment="Forward Authorization to the HTTP API; no effective caching",
+            min_ttl=cdk.Duration.seconds(0),
+            default_ttl=cdk.Duration.seconds(0),
+            max_ttl=cdk.Duration.seconds(1),
+            header_behavior=cloudfront.CacheHeaderBehavior.allow_list(
+                "Authorization", "x-ev-session", "Content-Type"
+            ),
+            query_string_behavior=cloudfront.CacheQueryStringBehavior.all(),
+            cookie_behavior=cloudfront.CacheCookieBehavior.none(),
+        )
+
         self.distribution = cloudfront.Distribution(
             self,
             "Site",
@@ -75,7 +97,7 @@ class WebStack(cdk.Stack):
                     origin=origins.HttpOrigin(api_domain),
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
                     allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
-                    cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                    cache_policy=api_cache_policy,
                     origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
                     function_associations=[
                         cloudfront.FunctionAssociation(
@@ -88,10 +110,24 @@ class WebStack(cdk.Stack):
         )
 
         site_source = FRONTEND_BUILD if FRONTEND_BUILD.is_dir() else PLACEHOLDER
+        # Runtime settings the browser reads from /config.json (same origin, so the CSP's
+        # connect-src 'self' covers it): the analyst console signs in against this pool with
+        # USER_PASSWORD_AUTH (frontend/src/console/auth.ts). The pool ids are tokens of the Api
+        # stack that the deployment substitutes when it runs (Source.json_data markers). Locally
+        # there is no config.json, and the console offers the local token only.
+        runtime_config = s3deploy.Source.json_data(
+            "config.json",
+            {
+                "stage": cfg.stage,
+                "cognitoRegion": cfg.region,
+                "userPoolId": api.user_pool.user_pool_id,
+                "userPoolClientId": api.user_pool_client.user_pool_client_id,
+            },
+        )
         s3deploy.BucketDeployment(
             self,
             "DeploySite",
-            sources=[s3deploy.Source.asset(str(site_source))],
+            sources=[s3deploy.Source.asset(str(site_source)), runtime_config],
             destination_bucket=site_bucket,
             distribution=self.distribution,
             distribution_paths=["/*"],

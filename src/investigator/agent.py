@@ -125,31 +125,47 @@ def run(case: Any, gateway: Any, ctx: Any, clock: Callable[[], datetime], sleep:
         return {"content": [{"type": "tool_use", "id": f"pol-{len(runner.log) + len(policy.done)}-{name}",
                              "name": name, "input": args}], "stop_reason": "tool_use"}
 
-    for _turn in range(MAX_TURNS):
-        if time.perf_counter() - started > max_seconds:
+    turns_left = MAX_TURNS
+
+    def fall_back(reason: str) -> None:
+        # The provider can't answer, or answered something unusable (HTTP 4xx, refusal, output cut
+        # by max_tokens, no submit_report): the deterministic policy continues the SAME run. The
+        # tool calls already made were observed by the policy, the reason travels to the analyst as
+        # an open question and model_id says who wrote the report. Raising here would leave the
+        # case without a report; the lifecycle still catches anything that escapes.
+        nonlocal use_policy, model_id, fallback_note, turns_left
+        fallback_note = f"El modelo no respondió ({reason}); el reporte lo completó la política determinista"
+        use_policy, model_id = True, POLICY_MODEL_ID
+        turns_left = MAX_TURNS  # the policy gets a turn budget of its own; the time budget is shared
+
+    while turns_left > 0:
+        turns_left -= 1
+        elapsed = time.perf_counter() - started
+        if elapsed > max_seconds:
             raise ToolBudgetExceeded("time")
         if use_policy:
             resp = policy_turn(system, messages, TOOL_SPECS)
         else:
             try:
-                resp = llm_module.converse(system, messages, TOOL_SPECS, model_role="investigator", provider=provider)
+                # The per-call timeout is what is left of the run's time budget, so one slow call
+                # (SDK retries included) cannot take the run past max_seconds.
+                resp = llm_module.converse(system, messages, TOOL_SPECS, model_role="investigator", provider=provider,
+                                           timeout=max(1.0, max_seconds - elapsed))
                 model_id = resp.get("model_id") or model_id
                 for k in ("tokens_in", "tokens_out"):
                     usage[k] += int((resp.get("usage") or {}).get(k) or 0)
                 usage["cost_usd"] += float((resp.get("usage") or {}).get("cost_usd") or 0.0)
             except (llm_module.ProviderUnavailable, TimeoutError) as e:
-                # The provider can't answer: the deterministic policy continues the SAME run.
-                fallback_note = f"El modelo no respondió ({type(e).__name__}); el reporte lo completó la política determinista"
-                use_policy, model_id = True, POLICY_MODEL_ID
-                for name, args in [(b["name"], b["input"]) for m in messages if m["role"] == "assistant"
-                                   for b in m["content"] if isinstance(b, dict) and b.get("type") == "tool_use"]:
-                    pass  # earlier calls already happened; the policy re-reads what it needs
-                resp = policy_turn(system, messages, TOOL_SPECS)
+                fall_back(type(e).__name__)
+                continue
             except llm_module.ModelError as e:
-                raise InvestigatorError(f"model error: {e}") from e
+                status = getattr(e, "status", None)
+                fall_back(f"{type(e).__name__}{f' HTTP {status}' if status else ''}")
+                continue
+            if resp.get("stop_reason") in ("refusal", "max_tokens"):
+                fall_back(f"stop_reason {resp.get('stop_reason')}")
+                continue
         content = list(resp.get("content") or [])
-        if resp.get("stop_reason") in ("refusal", "max_tokens"):
-            raise InvestigatorError(f"stop_reason {resp.get('stop_reason')}")
         messages.append({"role": "assistant", "content": content})
         uses = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
         submit = next((b for b in uses if b.get("name") == OUTPUT_TOOL), None)
@@ -157,8 +173,11 @@ def run(case: Any, gateway: Any, ctx: Any, clock: Callable[[], datetime], sleep:
             submitted = dict(submit.get("input") or {})
             break
         if not uses:
+            if use_policy:
+                raise InvestigatorError("the policy produced a turn without tool calls")
             if nudged:
-                raise InvestigatorError("the model ended without submit_report")
+                fall_back("sin submit_report tras el recordatorio")
+                continue
             nudged = True
             messages.append({"role": "user", "content": "Termina llamando a submit_report con tu reporte."})
             continue

@@ -55,8 +55,10 @@ describe('sign-in', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     renderConsole(api, null)
     expect(screen.getByRole('heading', { name: /Entrar a la consola del analista/ })).toBeTruthy()
-    // Cognito is prepared but not enabled.
-    expect(screen.getByText(/USER_PASSWORD_AUTH/)).toBeTruthy()
+    // Cognito is off here: this site has no /config.json (the Web stack publishes it in AWS).
+    expect(screen.getByText('no configurado en este sitio')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /Cognito/ })).toHaveProperty('disabled', true)
+    expect(screen.queryByLabelText('Contraseña')).toBeNull()
     expect(api.listAnalystCases).not.toHaveBeenCalled()
     await user.type(screen.getByLabelText('Token de analista'), 'tok-analyst-synthetic')
     await user.click(screen.getByRole('button', { name: 'Entrar' }))

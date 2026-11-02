@@ -65,19 +65,21 @@ five colors of the principle (data, ML, rules, GenAI, people).
 
 **Title:** 240 planted cases, against the rules-only version
 
-**Message:** v2 resolves 41.6% of in-scope cases on its own with zero incorrect closures and zero unsafe outcomes, and its models beat the rules where the data is hard.
+**Message:** On 240 planted cases every control stays green (zero incorrect closures, zero unsafe outcomes), and the trained models beat the rules where the data is hard; the planted evaluation itself cannot separate v2 from the rules-only version.
 
-- Safe automated resolution 41.6% (79/190, CI 34.7–47.9) vs 40.5% rules-only; 0 incorrect closures, 0 wrong charges filed, 0 leaks of another customer's data, 0 actions from 24 injections
-- M1 wrong "this is your charge" confirmations 0.35% vs 2.9% for the rule (8,000 held-out queries); M2 intent macro-F1 0.935 vs 0.495 (180 held-out messages); M3 showed no lift, so it stays evidence only
-- Investigator: right recommendation in 48 of 49 cases, 100% valid citations; projected cost ≈ 0.018 USD per conversation (target < 0.05)
+- Safe automated resolution 41.6% (79/190, CI 34.8–48.7) vs 40.5% rules-only: the same cases but two. 0 incorrect closures, 0 wrong charges filed, 0 leaks in 204 cross-customer calls, 0 actions from 24 injections; the simulated customer knows the planted charge, so the closure and lane figures hold largely by construction
+- M1 ranks the right charge first in 75.5% vs 71.1% for the rule (8,000 synthetic queries, disjoint intervals) and confirms fewer wrong charges because its threshold was chosen for that; M2 intent macro-F1 0.935 vs 0.495 (180 held-out messages); M3 showed no lift, so it stays evidence only
+- Investigator (deterministic policy in this run, no model): recommends what the rule implies in 46 of 49 scored cases, gets 2 of 3 real frauds, every citation is an id the tools returned; projected cost ≈ 0.02 USD per conversation (order of magnitude; target < 0.05)
 
 **Image:** the metrics table of the evaluation page (`#/evaluacion`) with n and intervals visible and the
 "synthetic replica" label; M3's negative result in the same table.
 
-> Notas: decir "on a synthetic replica of the dataset" en voz. La ganancia de v2 sobre B1 en los escenarios es
-> chica (41.6 vs 40.5) porque ambos deciden la ruta con las mismas reglas y el cliente simulado es cuidadoso; la
-> ganancia grande está en M1, M2 y el investigador. Decirlo así, sin inflar. Latencia local p95 117 ms por turno,
-> sin modelo: no es la latencia de producción.
+> Notas: decir "on a synthetic replica of the dataset" en voz. v2 y B1 resuelven los mismos 77 casos y v2 dos más
+> (SC-130 y SC-133, comisiones idénticas que la regla no encontró): la diferencia no es significativa, y "ruta
+> correcta 100 %" y "0 cierres incorrectos" salen en gran parte por construcción (misma regla sobre la verdad
+> sembrada, cliente simulado que conoce el cargo). La ganancia real está en M1 (top-1), M2 y la evidencia que
+> reúne el investigador; el investigador de esta corrida es la política determinista, no un modelo. Decirlo así,
+> sin inflar. Latencia local p95 117 ms por turno, sin modelo: no es la latencia de producción.
 
 ### Slide 5 · Controls and failures
 
@@ -126,7 +128,7 @@ Recorded on the local build; a caption says so on screen ("recorded on the local
 | 2:15–2:55 | 5 · Human required, Martina (ES·AR) + Carlos | Martina: suggestion → "Es este" → lane C → offer to block the card → "Sí, bloquear tarjeta" → status read back. 8 s of Carlos: regulator mention → lane C, high priority | "Martina's charge has a fraud score of 82. In this bank's data a score over 30 was fraud every time, so a rule sends her straight to the fraud team. The card is blocked only after her explicit yes, and the status is read back from the core. Carlos mentions the regulator: straight to a person, high priority, with the file already built." | fraud_score > 30 = fraude siempre en los datos reales (README §1). |
 | 2:55–3:45 | 6 · Analyst console + Portuguese, João (PT) | Second tab `#/consola`: queue with SLA; open Andrés's duplicate case: said vs verified, rule and rules version, investigator report with citations → click a citation → Evidence tab. Then João's case: "Editar", change the PT draft, reason, send. Back to João's chat: "Humano · aprovado por um analista" | "Lane B cases reach an analyst with the evidence already gathered: what the customer said, what the data verified, the rule that fired, and an investigator report where every claim cites a record. The analyst decides. João wrote in Portuguese; the case, the draft and the answer stay in Portuguese. Each decision becomes a training label." | La consola marca el reporte como "sin modelo" (política determinista). Decirlo: "in this recording the investigator runs its deterministic policy; with model access it's Claude, same tools and checks". |
 | 3:45–4:20 | 7 · Break it on purpose | Judge panel: "Herramienta de transacciones caída" → next message → lane C `tool_failure`. Then the injection probe → template, no buttons. Then the trace view `#/traza` | "Judges can break it. Take the transactions tool down: two retries, then the case goes to a person, marked incomplete. Paste an injection: it's treated as data, gets a fixed reply, and is flagged. The trace shows every step: which rule, which version, how long, and what failed." | Opcional: "Modelo lento" (8 s reales; cortar en edición). |
-| 4:20–4:50 | 8 · Evidence | Evaluation page `#/evaluacion` | "We measured it on 240 planted cases on a synthetic replica of the dataset, against the rules-only version. v2 resolved 41.6% safely on its own, with zero incorrect closures and zero unsafe outcomes. The trained models beat the rules where it's hard: eight times fewer wrong charge confirmations, and intent accuracy nearly doubled. One model, risk scoring, showed no lift, so it stays evidence only. We report that too." | Solo cifras de `docs/evaluacion.md`. |
+| 4:20–4:50 | 8 · Evidence | Evaluation page `#/evaluacion` | "We measured it on 240 planted cases on a synthetic replica of the dataset, against the rules-only version. Every control stayed green: zero incorrect closures, zero unsafe outcomes. The planted cases cannot tell the two versions apart, and we say so. The trained models beat the rules where it's hard: the ranker finds the right charge first more often, and intent accuracy nearly doubled on messages written apart from the training data. One model, risk scoring, showed no lift, so it stays evidence only. We report that too." | Solo cifras de `docs/evaluacion.md`; no decir "eight times fewer": esa cifra depende del umbral elegido. |
 | 4:50–5:15 | 9 · Path to production | Cloud diagram (`docs/architecture.md`) → slide 6 | "It's designed for serverless AWS, and the infrastructure code is written and tested, though this recording runs locally. To go live it needs the real data, real identity and core banking, and native Portuguese review. The controls are already in code, and the README says exactly what is measured and what is not." | |
 
 Total: 5:15. If it runs long, cut Carlos in scene 5 and keep one switch in scene 7.

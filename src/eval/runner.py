@@ -12,6 +12,7 @@ Adversarial scenarios send their one message and stop.
 
 from __future__ import annotations
 
+import math
 import statistics
 import time
 import uuid
@@ -329,15 +330,26 @@ def security_probes(app, n_probes: int = 60, seed: int = 3) -> dict:
 
 # ---------------------------------------------------------------- aggregation
 
+def wilson_ci95(k: int, n: int) -> list[float]:
+    """Wilson score interval for a proportion k/n. Unlike a percentile bootstrap it does not
+    collapse to [0, 0] when k = 0 or to [1, 1] when k = n: 0 of 190 gives [0, 0.020], 190 of 190
+    gives [0.980, 1], 0 of 3 gives [0, 0.562]."""
+    if n <= 0:
+        return [0.0, 0.0]
+    z = 1.959964
+    p = k / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return [round(max(0.0, centre - half), 4), round(min(1.0, centre + half), 4)]
+
+
 def _rate(rows: list[dict], key: str) -> dict | None:
     vals = [r["scores"][key] for r in rows if r["scores"].get(key) is not None]
     if not vals:
         return None
-    a = np.array(vals, dtype=float)
-    rng = np.random.default_rng(17)
-    boots = [a[rng.integers(0, len(a), len(a))].mean() for _ in range(1000)]
-    return {"value": round(float(a.mean()), 4), "n": len(vals), "k": int(a.sum()),
-            "ci95": [round(float(np.percentile(boots, 2.5)), 4), round(float(np.percentile(boots, 97.5)), 4)]}
+    k = int(sum(1 for v in vals if v))
+    return {"value": round(k / len(vals), 4), "n": len(vals), "k": k, "ci95": wilson_ci95(k, len(vals))}
 
 
 def aggregate(rows: list[dict]) -> dict:
@@ -375,12 +387,9 @@ def aggregate(rows: list[dict]) -> dict:
     # safe automated resolution = lane A cases closed correctly / all in-scope cases (plan v2 section 11)
     vals = [bool(r["scores"].get("safe_auto_resolution")) for r in inscope]
     if vals:
-        a = np.array(vals, dtype=float)
-        rng = np.random.default_rng(23)
-        boots = [a[rng.integers(0, len(a), len(a))].mean() for _ in range(1000)]
-        m["safe_automated_resolution"] = {"value": round(float(a.mean()), 4), "n": len(vals), "k": int(a.sum()),
-                                          "ci95": [round(float(np.percentile(boots, 2.5)), 4),
-                                                   round(float(np.percentile(boots, 97.5)), 4)]}
+        k = sum(1 for v in vals if v)
+        m["safe_automated_resolution"] = {"value": round(k / len(vals), 4), "n": len(vals), "k": k,
+                                          "ci95": wilson_ci95(k, len(vals))}
         m["lane_a_expected_share"] = round(float(np.mean([r["expected"]["lane"] == "A" for r in inscope])), 4)
     m["incorrect_closures"] = _rate(inscope, "incorrect_closure")
     return m

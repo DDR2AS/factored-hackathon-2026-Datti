@@ -17,7 +17,7 @@ from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from constructs import Construct
 
-from .common import allow_bedrock, model_environment, python_function
+from .common import allow_bedrock, allow_task_responses, model_environment, python_function
 from .config import StageConfig
 from .data_stack import DataStack
 from .workflow_stack import WorkflowStack
@@ -76,7 +76,7 @@ class ApiStack(cdk.Stack):
         data.artifacts.grant_read(self.function)
         data.traces.grant_put(self.function)
         workflow.state_machine.grant_start_execution(self.function)
-        workflow.state_machine.grant_task_response(self.function)
+        allow_task_responses(self.function)  # the analyst's decision answers the AwaitAnalyst token
         allow_bedrock(self.function)
         # Create and delete one-time SLA timers in the workflow's schedule group.
         self.function.add_to_role_policy(
@@ -100,9 +100,12 @@ class ApiStack(cdk.Stack):
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=cfg.removal_policy,
         )
+        # USER_PASSWORD_AUTH: the console signs in with InitiateAuth over fetch, no SRP library
+        # (frontend/src/console/auth.ts), and sends the id token (audience = this client, with the
+        # email claim) to the JWT authorizer. SRP stays on for CLI/SDK clients.
         self.user_pool_client = self.user_pool.add_client(
             "AnalystConsole",
-            auth_flows=cognito.AuthFlow(user_srp=True),
+            auth_flows=cognito.AuthFlow(user_srp=True, user_password=True),
             generate_secret=False,
             access_token_validity=cdk.Duration.hours(1),
             id_token_validity=cdk.Duration.hours(1),

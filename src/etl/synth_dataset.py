@@ -35,9 +35,26 @@ null. The generator follows the rules the v1.4 analysis found in the real data (
 - Complaints: five categories ~20% each; ``affected_product_id`` is a random product of the
   whole bank (another customer's in practice); ``is_repeat_complainer`` is a 15% coin flip;
   resolution 1..30 days (median 16), first response median ~38 h.
-- Known quality defects: Mexican customers with +54 phones and "DNI" documents, shared emails,
-  broken registration-branch keys, 6% ``last_updated`` in the future, "Mexico" without accent,
-  unfilled ``{monto} {moneda}`` in transcripts, "Oferta especial en nan!" subjects.
+- Known quality defects reproduced: Mexican customers with +54 phones and "DNI" documents,
+  shared e-mails, broken registration-branch keys, "Mexico" without accent, unfilled
+  ``{monto} {moneda}`` in some transcripts.
+
+What it does NOT reproduce (measured against docs/v14_datos_reales/data_profile.md)
+----------------------------------------------------------------------------------
+- Two tables are thinner, to keep generation fast: ~30 digital events per customer
+  (``gen_digital_events(per_customer=30)``) against ~104 in the real data, and campaign sends at
+  half the real rate (``gen_campaign_sends(scale=0.5)``). ``digital_sessions`` (used by M3 and the
+  investigator) is therefore sparser than it would be on the real data.
+- Five real defects are absent, which is why the quality report shows 30 WARN here and 35 on the
+  real data: "¡Oferta especial en nan!" subjects (every campaign here has a product, so the code
+  path never fires), ``products.last_updated`` in the future (clipped to the snapshot date),
+  duplicated product numbers, duplicated employee codes and incoherent NPS categories.
+- Magnitudes differ where the analysis only fixed a direction: shared e-mails 12% of customers vs
+  53%, placeholder transcripts 26% vs 100%, invalid document type for the country 70% vs 50%,
+  transaction country different from the customer's 1.9% vs 4.6%, fraud 0.4% vs 0.1% (on purpose).
+- The historical baselines (B0: complaint FCR 43.6%, CSAT 2.43, first response ~38 h, p90
+  resolution 28 days) are PARAMETERS of this generator that ``kpi_baseline`` reads back. Matching
+  them is by construction, not a validation of the pipeline or of the system.
 
 Scale is ~1/40 of the customers by default (``--customers 4000``). Every number computed on the
 replica must be labelled as synthetic; rerun with the real data for real numbers. A marker file
