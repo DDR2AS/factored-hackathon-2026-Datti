@@ -98,7 +98,7 @@ Hay dos formas:
 1. Levantar la API con el front ya compilado: `python scripts/local_api.py --port 8000 --investigation-delay 2`.
 2. Copiar el token de la línea que empieza con "Consola del analista:" ("… token generado para esta ejecución: …"). Para uno fijo, poner `LOCAL_ANALYST_TOKEN=<algo largo>` en `.env` (nunca se commitea). Solo `scripts/local_api.py` conoce ese nombre: `src/` no tiene bypass; el script imita al autorizador JWT de Cognito, valida `Authorization: Bearer <token>` en `/api/analyst/*` e inyecta los claims `{sub: "analista-local", email: "analista@demo.local"}`. Sin token o con uno equivocado: 401 `{"message":"Unauthorized"}`, como API Gateway.
 3. Abrir http://127.0.0.1:8000/#/consola (o el botón "Abrir consola del analista" del panel del juez, que abre otra pestaña), elegir "Token de analista local" y pegarlo. El token queda en memoria y en `sessionStorage` de esa pestaña; "Salir" lo borra. Si la API se reinicia, el token viejo da 401 y la consola pide entrar de nuevo sin perder el borrador.
-4. Cognito (nube) aparece como "no habilitado": falta que Andrés habilite `USER_PASSWORD_AUTH`, cree un usuario analista demo y agregue el dominio de Cognito a la CSP.
+4. Cognito (nube) aparece como "no configurado en este sitio": la consola lo ofrece solo donde el sitio publica `/config.json` con el pool, que escribe el Web stack en AWS (el CDK ya habilita `USER_PASSWORD_AUTH` y la CSP permite `cognito-idp.us-east-2.amazonaws.com`). Allí se entra con el correo y la contraseña del usuario analista que crea quien despliega (`docs/despliegue_aws.md` §3); el id token dura 1 h y, al vencer, la consola pide entrar de nuevo sin perder el borrador.
 
 Circuito completo para mostrar (dos pestañas):
 

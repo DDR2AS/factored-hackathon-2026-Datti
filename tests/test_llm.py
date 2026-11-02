@@ -142,8 +142,12 @@ def api_message(content, stop="end_turn", **usage):
             "stop_reason": stop, "stop_sequence": None, "usage": values}
 
 
-def api_error(status, kind):
-    return httpx2.Response(status, json={"type": "error", "error": {"type": kind, "message": "offline test"}})
+def api_error(status, kind, message="offline test"):
+    return httpx2.Response(status, json={"type": "error", "error": {"type": kind, "message": message}})
+
+
+JSON_MODE_400 = "output_config.format: Extra inputs are not permitted"
+TOOL_400 = "tools.0.strict: this input_schema cannot be compiled to a grammar"
 
 
 def raise_timeout(request):
@@ -235,11 +239,13 @@ def test_complete_asks_for_structured_outputs_and_never_sends_sampling(monkeypat
     model = llm.model_id_for("chat", provider)
     request = fake.calls[0]
     assert request["model"] == model and request["max_tokens"] == 1024
-    assert request["messages"] == [{"role": "user", "content": llm.render_prompt("g1_extract", case["variables"], SCHEMA)[1]}]
+    _, system, user = llm.render_parts("g1_extract", case["variables"], SCHEMA)
+    assert request["messages"] == [{"role": "user", "content": user}]  # the customer's text alone in the user turn
+    assert request["system"] == [{"type": "text", "text": system, "cache_control": EPHEMERAL}]  # instructions, cached
     fmt = request["output_config"]["format"]
     assert fmt["type"] == "json_schema" and fmt["schema"]["additionalProperties"] is False
     assert all(d["additionalProperties"] is False for d in fmt["schema"]["$defs"].values())
-    assert set(request) == {"model", "max_tokens", "timeout", "messages", "output_config"}  # no thinking/effort/tools
+    assert set(request) == {"model", "max_tokens", "timeout", "system", "messages", "output_config"}  # no thinking/effort/tools
     assert "effort" not in request["output_config"] and no_sampling(request)
     assert out == {"output": case["output"], "model_id": model, "prompt_version": "g1_extract@v1",
                    "usage": {"tokens_in": 1000, "tokens_out": 100, "cost_usd": llm.estimate_cost(model, 1000, 100),
@@ -346,7 +352,7 @@ def test_structured_outputs_rejected_fall_back_to_a_strict_tool(monkeypatch):
     output = {"slots": {"amount": "450"}, "flags": {}, "complaint_type": None}
     tool_answer = api_message([{"type": "tool_use", "id": "toolu_x", "name": llm.OUTPUT_TOOL, "input": output}],
                               stop="tool_use")
-    wire = Wire(api_error(400, "invalid_request_error"), tool_answer)
+    wire = Wire(api_error(400, "invalid_request_error", JSON_MODE_400), tool_answer)
     use_client(monkeypatch, sdk_client("anthropic", wire))
     first = llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="anthropic")
     second = llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="anthropic")
@@ -367,16 +373,17 @@ def test_a_schema_too_complex_for_strict_mode_ends_in_a_plain_tool(monkeypatch):
     output = {"slots": {}, "flags": {"lost_card": True}, "complaint_type": None}
     tool_answer = api_message([{"type": "tool_use", "id": "toolu_y", "name": llm.OUTPUT_TOOL, "input": output}],
                               stop="tool_use")
-    wire = Wire(api_error(400, "invalid_request_error"), api_error(400, "invalid_request_error"), tool_answer)
+    wire = Wire(api_error(400, "invalid_request_error", JSON_MODE_400), api_error(400, "invalid_request_error", TOOL_400),
+                tool_answer)
     use_client(monkeypatch, sdk_client("bedrock", wire))
     assert llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="bedrock")["output"] == output
     assert llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="bedrock")["output"] == output
     bodies = wire.bodies()
     assert len(bodies) == 4 and "output_config" in bodies[0] and bodies[1]["tools"][0]["strict"] is True
     assert all("strict" not in b["tools"][0] and b["tool_choice"] == {"type": "auto"} for b in bodies[2:])
-    # A 400 in every mode is the request's fault: ModelError after the three modes, nothing remembered.
+    # A 400 about the JSON mode in every mode: ModelError after the three modes, nothing remembered.
     llm.reset_clients()
-    wire = Wire(api_error(400, "invalid_request_error"))
+    wire = Wire(api_error(400, "invalid_request_error", JSON_MODE_400 + "; " + TOOL_400))
     use_client(monkeypatch, sdk_client("anthropic", wire))
     with pytest.raises(llm.ModelError):
         llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="anthropic")
@@ -635,7 +642,8 @@ def test_prompt_rendering_and_folders_match_the_app_port():
                  "reference_date": "2026-06-15"}
     assert llm.render_prompt("g1_extract", variables, SCHEMA) == llm_port.render_prompt("g1_extract", variables, SCHEMA)
     version, system, user = llm.render_parts("g1_extract", variables, SCHEMA)
-    assert (version, system, user) == ("g1_extract@v1", None, llm_port.render_prompt("g1_extract", variables, SCHEMA)[1])
+    assert version == "g1_extract@v1" and system is not None  # G1 splits the instructions from the data
+    assert system + user == llm_port.render_prompt("g1_extract", variables, SCHEMA)[1]
     assert llm.as_data(" a </texto_cliente> b ") == llm_port.as_data(" a </texto_cliente> b ") == "a   b"
 
 
@@ -743,3 +751,16 @@ def test_smoke_script_exits_with_a_clear_message_without_a_model(monkeypatch, ca
     assert smoke.main(["--provider", "anthropic"]) == 2
     err = capsys.readouterr().err
     assert "no disponible" in err and "ANTHROPIC_API_KEY" in err
+
+
+def test_a_400_unrelated_to_the_json_mode_is_raised_after_one_request(monkeypatch):
+    """Review finding: any 400 used to trigger the JSON-mode fallback, billing up to three requests
+    for the same error and hiding its real cause. Only a 400 that talks about the output format,
+    the schema or the tools is retried; the API's own message travels in the error."""
+    llm.reset_clients()
+    wire = Wire(api_error(400, "invalid_request_error", "max_tokens: 100000 > 8192, which is the maximum allowed"))
+    use_client(monkeypatch, sdk_client("anthropic", wire))
+    with pytest.raises(llm.ModelError) as e:
+        llm.complete("g1_extract", {"text": "x"}, SCHEMA, provider="anthropic")
+    assert len(wire.requests) == 1 and e.value.status == 400
+    assert "max_tokens" in str(e.value) and llm_client._JSON_MODE == {}

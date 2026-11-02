@@ -104,7 +104,7 @@ Imprime `model_id`, `prompt_version`, tokens, costo estimado, latencia y la sali
 ## Despliegue en AWS
 
 - La Lambda necesita el SDK: `anthropic==2.3.0` en `src/requirements-lambda.txt` (boto3 ya viene en el runtime y firma las llamadas a Bedrock).
-- Permiso IAM: el endpoint de Messages de Bedrock usa la acción `bedrock-mantle:CreateInference` sobre los modelos permitidos; `infra/stacks/common.py::allow_bedrock` hoy da solo `bedrock:InvokeModel*`. Sin ese permiso cada llamada es 403 → `ProviderUnavailable` → G1 cae a reglas.
+- Permiso IAM: el endpoint de Messages de Bedrock usa la acción `bedrock-mantle:CreateInference` sobre los modelos permitidos; `infra/stacks/common.py::allow_bedrock` la concede (recurso `*` limitado a la región de la etapa por condición; `-c bedrockMantleResources=...` lo acota cuando se confirme el formato del ARN) además de `bedrock:InvokeModel*` sobre los modelos de Anthropic y los perfiles de inferencia. Sin ese permiso cada llamada es 403 → `ProviderUnavailable` → G1 cae a reglas.
 - Acceso a modelos: Haiku 4.5 y Sonnet 5 están abiertos en Bedrock; Opus 5 puede requerir habilitarlo en la consola (Model access). La región `us-east-2` está soportada.
 
 ## Tests

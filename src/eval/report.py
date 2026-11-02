@@ -1,7 +1,8 @@
 """Evaluation report (``make eval``): one YAML for the app's evaluation page and one Markdown for people.
 
 Output: ``data/eval/report_latest.yaml`` (+ a timestamped copy; read by ``GET /evaluation``) and
-``docs/evaluacion.md``. Every number says its sample size; rates carry bootstrap 95% intervals; the
+``docs/evaluacion.md``. Every number says its sample size; rates carry Wilson 95% intervals (a
+percentile bootstrap collapses to [0, 0] at 0/n, which hides how little n = 3 proves); the
 data source (organizers' dataset or synthetic replica) and the model versions are stated, and the
 limits are listed. Nothing here is invented: missing pieces (a real LLM for G1/G3, the zero-shot
 baseline B2) are reported as "not run" with the reason.
@@ -50,6 +51,15 @@ HEADLINE = [
 FAIR_METRICS = (("lane_accuracy", "ruta correcta"), ("charge_accuracy", "cargo correcto"),
                 ("safe_automated_resolution", "resolución automática segura"),
                 ("auto_resolution_when_expected", "resuelto cuando debía"))
+
+
+def _wilson_hi(k: int, n: int) -> str:
+    """'IC 95 % hasta X %' for a count k of n (Wilson), so a 0 of 3 is not read as a 0."""
+    from eval.runner import wilson_ci95  # noqa: PLC0415
+
+    if not n:
+        return "sin intentos"
+    return f"IC 95 % hasta {wilson_ci95(int(k), int(n))[1] * 100:.1f} %"
 
 
 def fairness_gaps(fair: dict, limit_points: float = 5.0) -> list[dict]:
@@ -236,7 +246,9 @@ def projected_cost(rows: list[dict]) -> dict:
             "investigator_per_case_usd": round(case, 4) if case is not None else None,
             "share_of_conversations_investigated": round(share, 3),
             "total_per_conversation_usd": round((conv or 0) + (case or 0) * share, 5),
-            "note": "PROYECCIÓN con precios de lista y tamaños de prompt medidos; sin prompt caching (cota alta)"}
+            "note": ("PROYECCIÓN con precios de lista y tamaños de prompt medidos: un orden de magnitud (0.01 a 0.04 USD), "
+                     "no una cota. Supone 4 caracteres por token, sin razonamiento extendido (Sonnet 5 lo activa por "
+                     "defecto y lo factura como salida), sin reintentos y sin prompt caching")}
 
 
 def _slim(r: dict) -> dict:
@@ -391,9 +403,13 @@ def write_doc(rep: dict) -> None:
                      f"{_dist(v['lanes'], 'sin caso')} | {right} | {v.get('unsafe', '—')} |")
     sec = rep["security"]["v2"]
     lines += ["", "## Pruebas de seguridad (v2)", "",
-              f"- Herramientas pidiendo registros de otro cliente: {sec['tool_scope']['leaks']} fugas en {sec['tool_scope']['n']} intentos.",
-              f"- Sesión vencida: {sec['expired_session']['data_shown']} respuestas con datos en {sec['expired_session']['n']} intentos.",
-              f"- Caso de otra sesión: {sec['other_session_case']['leaks']} fugas en {sec['other_session_case']['n']} intentos.",
+              f"- Herramientas pidiendo registros de otro cliente: {sec['tool_scope']['leaks']} fugas en {sec['tool_scope']['n']} intentos"
+              f" (tasa de fuga {_wilson_hi(sec['tool_scope']['leaks'], sec['tool_scope']['n'])}).",
+              f"- Sesión vencida: {sec['expired_session']['data_shown']} respuestas con datos en {sec['expired_session']['n']} intentos"
+              f" ({_wilson_hi(sec['expired_session']['data_shown'], sec['expired_session']['n'])}: n pequeño, prueba poco por sí sola).",
+              f"- Caso de otra sesión: {sec['other_session_case']['leaks']} fugas en {sec['other_session_case']['n']} intentos"
+              f" ({_wilson_hi(sec['other_session_case']['leaks'], sec['other_session_case']['n'])}).",
+              "- Las sondas llaman al gateway y a la app en proceso, no por HTTP; la capa HTTP la cubren los tests de la API.",
               f"- Herramienta caída: ruta {sec['tool_failure']['lane']}, degradado {sec['tool_failure']['degraded']} "
               f"({'camino seguro' if sec['tool_failure']['safe'] else 'NO seguro'}).", ""]
     m1 = rep["models"]["m1"]

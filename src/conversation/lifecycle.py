@@ -81,6 +81,7 @@ still open (the same check as here). ``on_decision`` and ``on_opened`` = ``Delet
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import threading
 import time
@@ -100,6 +101,8 @@ from conversation.investigator_stub import (
 )
 from conversation.store import CaseVersionConflict, StoreConfigError, StoredCase, Stores
 from conversation.templates import forbidden_hits, format_date, local_datetime, render
+
+log = logging.getLogger(__name__)
 
 DEFAULT_INVESTIGATION_DELAY_SECONDS = 4.0
 DEFAULT_CLOSE_AFTER_SECONDS = 30.0
@@ -517,6 +520,12 @@ class LocalLifecycle:
             error = "tool_budget_exceeded"
         except (ValidationError, ValueError):
             error = "invalid_report"
+        except Exception as e:  # noqa: BLE001 - a real model fails in ways the stub never did
+            # InvestigatorError (refusal, truncated output, no submit_report, HTTP 4xx) or any other
+            # crash: the case must still reach the analyst, marked incomplete, instead of staying
+            # in "investigating" for ever. The class name travels in the trace and in the log.
+            error = "investigator_error" if type(e).__name__ == "InvestigatorError" else "investigator_crash"
+            log.exception("investigator failed for %s (%s)", case.case_id, type(e).__name__)
         latency = int(round((time.perf_counter() - started) * 1000))
         with self._lock:
             self._due.pop(case.case_id, None)

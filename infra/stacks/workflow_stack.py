@@ -15,7 +15,7 @@ from aws_cdk import aws_stepfunctions as sfn
 from aws_cdk import aws_stepfunctions_tasks as tasks
 from constructs import Construct
 
-from .common import allow_bedrock, model_environment, python_function
+from .common import allow_bedrock, allow_task_responses, model_environment, python_function
 from .config import StageConfig
 from .data_stack import DataStack
 
@@ -35,12 +35,6 @@ class WorkflowStack(cdk.Stack):
 
         environment = {**data.table_environment(), **model_environment(cfg)}
         state_machine_name = cfg.name("case-lifecycle")
-        # Built from the name (not the construct) so the case-steps role can answer task tokens
-        # without a circular reference between the function and the state machine that invokes it.
-        state_machine_arn = cdk.Stack.of(self).format_arn(
-            service="states", resource="stateMachine", resource_name=state_machine_name,
-            arn_format=cdk.ArnFormat.COLON_RESOURCE_NAME,
-        )
 
         self.investigator = python_function(
             self,
@@ -72,12 +66,9 @@ class WorkflowStack(cdk.Stack):
         data.cases.grant_read_write_data(self.case_steps)
         data.traces.grant_put(self.case_steps)
         # A retried AwaitAnalyst on a case already decided is answered at once (register_task_token).
-        self.case_steps.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"],
-                resources=[state_machine_arn],
-            )
-        )
+        # No reference to the state machine here (it would be circular: the machine invokes this
+        # function), and none is possible anyway: SendTask* take Resource "*" (common.py).
+        allow_task_responses(self.case_steps)
 
         # --- SLA timers --------------------------------------------------------------------
         self.schedule_group_name = cfg.name("sla-timers")

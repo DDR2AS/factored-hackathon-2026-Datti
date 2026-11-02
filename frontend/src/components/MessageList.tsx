@@ -235,6 +235,9 @@ export function ClarifyButtons({
             key={b.id}
             type="button"
             className={`chip ${KIND_CLASS[b.kind] ?? 'chip--choice'} ${used ? 'chip--used' : ''}`}
+            // Explicit name = the visible label (plus "chosen" once pressed), the same in every
+            // accessibility tree; some showed these chips without a name (review of 1 nov).
+            aria-label={used ? `${b.label} (${t('chat.buttonChosen')})` : b.label}
             disabled={inert && !isLast}
             aria-disabled={inert && isLast ? true : undefined}
             onClick={() => {

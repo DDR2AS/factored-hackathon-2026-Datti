@@ -2,7 +2,7 @@
 
 **Team Datti** · Factored AI & Data Hackathon 2026 · LATAM Bank dataset
 
-> **Status (29 Oct 2026).** Every stage of plan v2 is built and runs end to end on a laptop: data pipeline and
+> **Status (1 Nov 2026).** Every stage of plan v2 is built and runs end to end on a laptop: data pipeline and
 > quality contracts, gold tables, gateway, M1/M2/M3, LLM client, G1 extraction, G2 investigator, case lifecycle
 > and analyst console, planted-scenario evaluation against the rules-only baseline, trace queries, learning-loop
 > demo and the evaluation page. Two things are **not** done, and the README says so wherever it matters:
@@ -16,6 +16,10 @@
 >
 > Without model credentials G1 runs on a deterministic mock and G2 on a transparent deterministic policy (same
 > loop, tools and checks); with `LLM_PROVIDER=anthropic|bedrock` both use Claude ([`docs/llm_client.md`](docs/llm_client.md)).
+>
+> An independent review of this build on 1 Nov 2026 ([`docs/revision_v2.md`](docs/revision_v2.md)) found that
+> several numbers below held by construction and that the cloud path had three blockers. The code fixes are in
+> the repo; the numbers in sections 1, 6 and 8 are now stated with what they can and cannot show.
 
 A customer writes in Spanish or Portuguese about a charge or a fee they dispute. The system understands the
 request, finds the exact charge among **that customer's own** transactions, checks it against data, and a
@@ -62,9 +66,10 @@ Consequences (plan v2 §2–3, D1, D3, D7): go deep on the two money complaint t
 evidence itself (find the charge, verify ownership); real complaints can't be matched to real transactions, so
 the evaluation plants ground truth over real transactions; keep `fraud_score > 30` as a rule.
 
-The synthetic replica reproduces these baselines (B0 computed by the pipeline on the replica: complaint-contact
-FCR 43.6%, CSAT 2.43, median first response 38.4 h, p90 resolution 28 days, money complaints 40.6%, affected
-product of another customer 100%, fraud rule precision 100%): the generator follows the rules the analysis found.
+The synthetic replica is **parameterised** with these baselines, so the B0 the pipeline computes on it
+(complaint-contact FCR 43.6%, CSAT 2.43, median first response 38.4 h, p90 resolution 28 days, money complaints
+40.6%, affected product of another customer 100%, fraud rule precision 100%) matches them by construction. That
+checks that the pipeline reads the generator back correctly; it is not evidence about the system.
 
 ## 2. What the system does
 
@@ -90,11 +95,11 @@ product of another customer 100%, fraud rule precision 100%): the generator foll
 | Step | Decided by | Component | State |
 |---|---|---|---|
 | Which customer data can be read | Gateway (code) | `src/gateway/`: tools scoped by the server-side `customer_id`; backends `demo` (judge-mode customers), `duckdb` (gold tables), `composite` | Built and tested; DynamoDB backend in `src/cloud/` (offline-tested) |
-| Intent class (9) | ML: M2 | `src/models/m2/`: hashed character and word n-grams plus an ES/PT concept lexicon, multinomial logistic regression, temperature-calibrated, accept/ask/human thresholds from validation | Built (`m2-hashlr-1`) |
+| Intent class (9) | ML: M2 | `src/models/m2/`: hashed character and word n-grams plus an ES/PT concept lexicon, multinomial logistic regression, temperature-calibrated, accept/ask/human thresholds from validation; the keyword guard runs with it | Built (`m2-hashlr-1`, the default backend; its class enters the rules only above its accept threshold) |
 | Slot extraction | GenAI: G1 | rule extractor + G1 through `src/llm` (`g1_extract@v1`) | Mock without credentials; Claude with `LLM_PROVIDER=anthropic|bedrock` |
 | Which charge | ML: M1 | `src/models/m1/`: LightGBM LambdaRank + calibrated confidence model; the v1.4 rule is the baseline and fallback | Built (`m1-lgbm-1`, primary because it beats the rule on the frozen test) |
 | Risk evidence | Data + ML: M3 | `src/models/m3/`: amount vs the customer's usual, first time at merchant, hour, velocity, login/new device | Built; lift experiment says **no lift**, so evidence only |
-| **The lane** | **Rules** | `lane_rules.yaml`; no model output can choose it (D2) | Built |
+| **The lane** | **Rules** | `lane_rules.yaml` evaluates evidence from code (gateway results, the customer's confirmations) and model outputs used as data: M2's class above its accept threshold, G1's flags and its `complaint_type` suggestion. Three lane C rules (`lost_card`, `asks_for_human`, the regulator/compensation/staff flags) can fire on such a model output alone, always towards a person. No model output picks lane A or B by itself: the A rules need the customer to recognise the charge or to accept the explanation of a fee that matches the published schedule (D2, as implemented) | Built |
 | Customer-facing text | Templates | ES (tú/usted/vos) and PT templates; `reply_source: template` | Built |
 | Investigation of lane B money cases | GenAI: G2 | `src/investigator/`: read-only tools, ≤ 12 calls, ≤ 90 s, cited findings, citation check in code | Deterministic policy without credentials (labelled "sin modelo" in the console); Claude with credentials |
 | Anything touching money or the account | **People** | Analyst console: approve, edit, reject | Built |
@@ -143,15 +148,15 @@ EventBridge Scheduler, Bedrock; the pipeline runs per partition in Lambda (the 1
 | Brief requirement | Mechanism | Evidence |
 |---|---|---|
 | Permissions outside model prose | The gateway takes `customer_id` from the server-side session, never from text; a record of another customer raises `NotOwned`; a case of another session answers 403 like a missing one | Evaluation probes: 0 leaks in 204 cross-customer tool calls; `tests/test_pipeline_gateway.py` |
-| The model never decides | Lane chosen only by `lane_rules.yaml`; G1 returns slots only, no tools, no customer text; G2 proposes, an analyst decides | Trace shows `actor: rule` for the lane |
-| Prompt injection | Customer text wrapped as data; a manipulation guard (patterns) OR-ed with M2 answers with a template, no tools, no case | 0 actions from injected text in 24 adversarial scenarios |
+| Models never pick lane A or B | Lane chosen by `lane_rules.yaml` over evidence from code and model outputs used as data (M2 class above its accept threshold, G1 flags); three C rules can fire on a model output alone, always towards a person; G1 returns slots and flags only, no tools; G2 proposes, an analyst decides | Trace shows `actor: rule` for the lane; `tests/test_review_round4.py` |
+| Prompt injection | Customer text wrapped as data in the user turn, G1's instructions in the system prompt; the manipulation guard (patterns) or a confident M2 verdict answers with a template, no tools, no case. The patterns alone catch a minority of new attempts (1 of 4 in the review; the trained M2 caught 4 of 4), which is why M2 is the default backend. G2 reads the redacted statement as data: a manipulated recommendation inside the allowed list, with real citations, would still reach the analyst as a proposal, never as an action | 0 actions from injected text in 24 adversarial scenarios, measured with the mock G1 and the policy G2, which never read the text: it proves the guard and the templates, not G1 or G2 against a real model |
 | Expired session | 15-minute TTL; expired or unknown token → 401, no data | Probe: 0 responses with data after expiry |
 | Unauthorized console access | `/analyst/*` trusts only JWT claims from the authorizer; no bypass in `src/` | `tests/test_api.py` |
 | Tool failure | Two retries with backoff, then lane C `tool_failure`, case marked incomplete | Probe: safe path taken |
-| Model slow or down | 8 s timeout; rule extractor and fixed buttons take over; G2 falls back to the deterministic policy | `tests/test_g1.py`, `tests/test_llm.py` |
+| Model slow or down | 8 s timeout; rule extractor and fixed buttons take over. G2: any model failure (unavailable, timeout, HTTP 4xx, refusal, output cut by `max_tokens`, no report) falls back to the deterministic policy in the same run, with the reason as an open question; an investigator crash leaves the case with the analyst marked incomplete, never stuck in "investigating" | `tests/test_g1.py`, `tests/test_llm.py`, `tests/test_review_round4.py` |
 | Structured handoff | Queue, priority, verified facts, open questions | 100% of lane C cases complete in the evaluation |
 | No money movement, no promises | No tool moves money; card block needs the customer's yes; drafts are checked against forbidden promises | `tests/test_investigator_g2.py` |
-| Investigator citations | Every cited id must come from this run's tool results; unsupported claims removed and counted | 100% valid citations in the evaluation |
+| Investigator citations | Every cited id must exist in this run's tool results (the check verifies the id, not the claim: a wrong record of the same customer would pass); unsupported ids removed and counted | 100% valid citations in the evaluation, by construction: the deterministic policy only cites its own results |
 | Data minimization | Redaction before any model call or storage; gold tables carry no document, e-mail, phone, address or full product number | `tests/test_pipeline_gateway.py::test_gold_has_no_pii_columns` |
 | Tracing and audit | One JSONL event per step (rule/model and version, tool, latency, tokens, cost, error code) | Trace view `#/traza`, `scripts/trace_report.py` |
 
@@ -197,15 +202,24 @@ At http://127.0.0.1:8000 (no deployed URL, see the status box):
 
 `make eval` runs **240 planted scenarios** end to end through the same app the chat uses (orchestrator, gateway,
 lane rules, case, lifecycle, investigator) with a simulated customer: ground truth planted over gold customers and
-transactions, 115 in Spanish and 125 in Portuguese, MX 107 · CO 79 · AR 54, 36 adversarial (injection, another
-customer's data, a charge that doesn't exist). The same scenarios run with **v2** and with **B1**, the v1.4
-rules-only version (keyword triage, rule ranking, no investigator). Data: **synthetic replica** (D15). Every rate
-has its n and a bootstrap 95% interval in [`docs/evaluacion.md`](docs/evaluacion.md); the evaluation page
-(`#/evaluacion`) reads the same report.
+transactions, 115 in Spanish and 125 in Portuguese, MX 107 · CO 79 · AR 54, 36 adversarial (24 injection, 12
+another customer's data) plus 14 with a charge that doesn't exist. The same scenarios run with **v2** and with
+**B1**, the v1.4 rules-only version (keyword triage, rule ranking, no investigator). Data: **synthetic replica**
+(D15). Every rate has its n and a Wilson 95% interval in [`docs/evaluacion.md`](docs/evaluacion.md); the
+evaluation page (`#/evaluacion`) reads the same report.
+
+**What this evaluation can and cannot show.** The expected lane of each scenario is the same rule file applied to
+the planted facts, and the simulated customer knows the planted charge: it never confirms a wrong one, never
+rejects an explanation and never asks for a person. So "correct lane", "correct charge" and "0 incorrect closures"
+hold largely **by construction**: they show that the orchestrator, the gateway and the rules do not break each
+other on 240 planted stories, not how the system decides with real customers. What can fail, and did not: the
+regulator and lost-card detection, the unsafe outcomes (wrong charge filed, another customer's data, action from
+injected text) and the convergence of each conversation. The rules `identity_not_verified`, `asks_for_human`,
+`asks_compensation`, `complaint_about_person` and `explanation_not_accepted` are not exercised by the scenarios.
 
 | Metric (plan v2 §11) | v2 | B1 rules-only | Target |
 |---|---|---|---|
-| Safe automated resolution | **41.6%** (79/190) [34.7–47.9] | 40.5% (77/190) | ≥ 30% with 0 incorrect closures |
+| Safe automated resolution | **41.6%** (79/190) [34.8–48.7] | 40.5% (77/190) [33.8–47.6] | ≥ 30% with 0 incorrect closures |
 | Incorrect closures | **0/190** | 0/190 | 0 |
 | Correct lane | 100% (190/190) | 99.0% (188/190) | — |
 | Missing critical handoffs · unnecessary handoffs | 0/190 · 0/190 | 0/190 · 2/190 | 0 · ≤ 10% |
@@ -214,8 +228,8 @@ has its n and a bootstrap 95% interval in [`docs/evaluacion.md`](docs/evaluacion
 | Unsafe probes: tools asked for other customers' records · data after session expiry | 0 leaks in 204 · 0 of 3 | — | 0 |
 | Wrong charge proposed as "this one" | 0/163 | 0/161 | < 1% |
 | First offer is the right charge, proposed directly | 92.0% (150/163) | 93.8% (151/161) | — |
-| Investigator recommendation matches the planted truth | **98.0%** (48/49) | empty case | better than B1 |
-| Investigator citations valid · reports with unsupported claims removed | 100% (63/63) · 0/63 | — | 100% valid |
+| Investigator recommendation matches the planted truth (deterministic policy, no model) | **98.0%** (48/49) | no investigator in this run (its table-driven stub scored 49/49 in an earlier run) | better than an empty case |
+| Investigator citations valid · reports with unsupported claims removed | 100% (63/63) · 0/63, by construction | — | 100% valid |
 | Latency per chat turn, p50 / p95 (local, no model) | 22 / 117 ms | — | p95 < 6 s |
 | Investigator per case, p50 / p95 (deterministic policy) | 79 / 177 ms | — | p95 < 90 s |
 
@@ -223,22 +237,35 @@ Model results on held-out sets (synthetic; details in [`docs/modelos/`](docs/mod
 
 | Model | Result | Compared with |
 |---|---|---|
-| **M1** ranker `m1-lgbm-1`, 8,000 frozen test queries (time split) | top-1 **75.5%**, recall@3 97.1%, wrong confirmations **0.35%**, "no such charge" detected 96.6% | v1.4 rule: 71.1%, 95.8%, 2.9%, 79.8%. M1 beats the rule, so it is primary |
-| **M2** intent `m2-hashlr-1`, 180 messages written apart from the generators (30 adversarial) | macro-F1 **0.935** [0.897–0.968], ES 0.937 / PT 0.927; manipulation caught 91.7%, none accepted as another intent | keywords: 0.495 [0.411–0.565], 47.2%, 11 accepted. B2 zero-shot LLM not run (no model) |
+| **M1** ranker `m1-lgbm-1`, 8,000 frozen test queries (time split by charge date; same query generator and same customers as training) | top-1 **75.5%** [74.5–76.5], recall@3 97.1%, wrong confirmations 0.35%, "no such charge" detected 96.6% | v1.4 rule: 71.1% [70.0–72.2], 95.8%, 2.9%, 79.8%. Top-1 is the comparable figure (disjoint intervals), so M1 is primary. The confirmation figures are not comparable: M1's confirm threshold was chosen on validation for ≤ 0.9% wrong confirmations (it confirms directly 23.9% of the time vs 35.6%), the rule's thresholds are fixed |
+| **M2** intent `m2-hashlr-1`, 180 messages written apart from the generators (30 adversarial; 12 of them are still close to generated training messages, Jaccard > 0.5, so 0.935 is optimistic) | macro-F1 **0.935** [0.897–0.968], ES 0.937 / PT 0.927; manipulation caught 91.7%, none accepted as another intent | keywords: 0.495 [0.411–0.565], 47.2%, 11 accepted. B2 zero-shot LLM not run (no model) |
 | **M3** risk evidence, frauds the `fraud_score > 30` rule misses | PR-AUC 0.0016 vs 0.0027 for `fraud_score`; difference CI [-0.0057, 0.0003]: **no lift** | So M3 stays evidence for the analyst and the rule stays; the same negative result as the real data (AUC 0.50) |
-| **Learning loop**, one cycle with simulated analyst decisions ([`docs/modelos/ciclo_aprendizaje.md`](docs/modelos/ciclo_aprendizaje.md)) | 240 new scenarios → 464 labels → 107 labelled M1 queries → candidate top-1 75.3%, wrong confirmations 0.88%: **not promoted** | Current M1 on the same frozen test (75.5%, 0.35%): the gate keeps a candidate that is less safe out |
+| **Learning loop**, one cycle with simulated analyst decisions ([`docs/modelos/ciclo_aprendizaje.md`](docs/modelos/ciclo_aprendizaje.md)) | 240 new scenarios → 464 labels → 107 labelled M1 queries → candidate top-1 75.3%, wrong confirmations 0.88%: **not promoted** | Current M1 on the same frozen test (75.5%, 0.35%): the gate keeps a candidate that is less safe out. One cycle with labels derived from the planted truth (107 queries, 0.36% of the training set) demonstrates the pipeline, not learning: the candidate's shift is the threshold re-selection |
 
 How to read it:
 
-- **Where v2 adds value.** On the planted scenarios v2 and B1 close almost the same cases: both decide the lane
-  with the same rule file, and the simulated customer never confirms a wrong charge. The difference shows where
-  the data is hard: M1 makes 8× fewer wrong "this is the charge" confirmations on 8,000 queries (it asks more
-  often, which is why its first offer is direct slightly less often above), M2 nearly doubles intent macro-F1
-  (0.935 vs 0.495) and catches 91.7% of manipulation attempts against 47.2%, and the investigator hands the
-  analyst a cited report with the right recommendation in 48 of 49 cases where B1 hands over an empty case.
+- **v2 against B1.** On the planted scenarios v2 and B1 resolve the same 77 of 190 cases; v2 resolves two more
+  (SC-130 and SC-133, identical maintenance fees that the rule ranker never found and M1 did). 41.6% vs 40.5%,
+  100% vs 99% correct lane and 0 vs 2 unnecessary handoffs are that same pair of cases; the difference is not
+  significant. B1 is slightly better at proposing the right charge directly (93.8% vs 92.0%) because M1 asks more
+  often. The scenario messages are close to the templates M2 was trained on, so the end-to-end run does not
+  stress M2 or the extractor; that is why keyword triage routes the same.
+- **Where the models beat the rules.** M1 ranks the right charge first in 75.5% vs 71.1% of 8,000 synthetic
+  queries (disjoint intervals); its fewer wrong confirmations (0.35% vs 2.9%) come mostly from a threshold chosen
+  for that goal. M2 nearly doubles intent macro-F1 on messages written apart from the generators (0.935 vs
+  0.495) and catches 91.7% of manipulation attempts against 47.2% for the keyword guard; the review tried four
+  new attempts and the patterns alone caught one, M2 all four.
+- **The investigator.** In this run it is the deterministic policy, not a model. In 46 of the 49 scored cases it
+  recommends what the lane rule already implies (duplicate not reversed → chargeback, fee off schedule →
+  reverse); it gets 2 of the 3 real frauds; the 14 near-identical cases have no planted truth and are not scored.
+  Every citation is an id the tools returned, by construction. The value it adds over B1's empty case is the
+  gathered evidence and the draft, which the analyst edits or rejects.
 - **Fairness.** Lane and charge accuracy are identical across ES/PT and MX/CO/AR. Safe automated resolution
   differs (ES 45.8% vs PT 37.2%; AR 53.3% vs CO 36.8%) only because the share of scenarios that should end in lane
   A differs by group; among those, every group resolves 100%. The report computes these gaps and their explanation.
+- **Security probes.** The 204 cross-customer tool calls, the expired-session and the other-session probes call
+  the gateway and the app in process, not over HTTP (`tests/test_api.py` covers the HTTP layer). "0 of 3" for
+  the expired session is n = 3: its Wilson interval reaches 56%, so it proves little by itself.
 - **Not run.** G1 and G2 with a real model (they ran on the mock and the deterministic policy), the G3 judge (needs
   a model and 50 replies scored by two people: `python scripts/judge.py --prepare` writes the sheet) and B2.
   The M2 test set was written by a separate agent, not by the team as the plan asked (declared in
@@ -250,8 +277,12 @@ How to read it:
   source file, partition date, ingestion time; a header that differs from the table's first file stops the run)
   → **silver** (the v1.4 SQL: typing, normalisation, de-duplication, `dq_` flags, FX normalisation) → **quality**
   (194 contracts: keys, allowed values, ranges, foreign keys, business rules, freshness) → **gold** (14 tables) →
-  DynamoDB import file. `run_partition(table, date)` reprocesses one daily partition (idempotent; the Lambda unit;
-  late corrections replace the partition), `backfill` does all partitions in one DuckDB statement.
+  DynamoDB import file. `run_partition(table, date)` reprocesses one daily partition (idempotent in row counts;
+  the Lambda unit; late corrections replace the partition). It rebuilds the 14 gold tables in full and does not
+  run the quality contracts, which stay a `make pipeline` step; silver de-duplicates within the partition, so a
+  correction that lands in another partition is caught by the next `make pipeline`, not by `run_partition`.
+  `backfill` does all partitions in one DuckDB statement (not yet run at the real data's scale: `digital_events`
+  alone is 15.6 M rows).
 - **Quality**: on the replica 194 checks, **164 PASS, 30 WARN, 0 FAIL** ([`docs/data/dq_report.md`](docs/data/dq_report.md));
   on the real data (v1.4): 194 checks, 159 PASS, 35 WARN, 0 FAIL ([`docs/v14_datos_reales/dq_report.md`](docs/v14_datos_reales/dq_report.md)).
   WARN rows are the dataset's known defects (transactions before product opening, cards used after expiry, shared
@@ -263,7 +294,10 @@ How to read it:
 - **Synthetic replica** (`src/etl/synth_dataset.py`, D15): 4,000 customers (1/37.5 of the real 150,000), three
   years, same 13 tables, columns and S3 layout, and the generator rules the v1.4 analysis found (independent
   draws plus a few exact rules; fraud rate scaled to 0.4% to keep ~450 frauds). It is a stand-in for running every
-  stage, not a substitute for the real data.
+  stage, not a substitute for the real data, and it is less faithful than the rules suggest: ~30 digital events
+  per customer against ~104 real, campaign sends at half the real rate, five real defects absent (that is why the
+  replica has 30 WARN and the real data 35), and shared e-mails or placeholder transcripts at different rates
+  (the module docstring lists every deviation).
 
 ## 8. Costs
 
@@ -277,7 +311,7 @@ Per conversation, from `make eval` ([`docs/evaluacion.md`](docs/evaluacion.md)):
 | Measured in this build | 0 USD | G1 ran on the mock provider and G2 on the deterministic policy: no model calls were made |
 | **Projected** chat (G1, Claude Haiku 4.5) | ≈ 0.0025 USD per conversation | List prices (`src/llm/prices.yaml`) × prompt sizes measured from the rendered prompts × the evaluation's free-text turns |
 | **Projected** investigator (G2, Claude Sonnet 5) | ≈ 0.061 USD per investigated case | Same method, with the tool calls of each report and the agent loop re-sending its growing context |
-| **Projected** total | **≈ 0.018 USD per conversation** (26% of conversations investigated) | Target < 0.05 USD. No prompt caching assumed, so this is an upper bound |
+| **Projected** total | **≈ 0.02 USD per conversation** (26% of conversations investigated, adversarial ones in the denominator) | Target < 0.05 USD. An order of magnitude (0.01 to 0.04), not a bound: the projection assumes 4 characters per token, no extended thinking (Sonnet 5 thinks adaptively by default and bills it as output), no retries and no prompt caching |
 
 The projection is an estimate, not a bill; the first real numbers come from `python scripts/llm_smoke.py` and
 the traces (`tokens_in`, `tokens_out`, `cost_usd` per step) once a model is configured.
@@ -312,6 +346,14 @@ unfinished owner's work; **D15** run every stage on a synthetic replica when the
 - Latency was measured locally (one process, no network, no cold start); costs are projections from list prices.
 - Nothing is deployed: there is no public URL; the CDK app and the cloud adapters are tested offline only.
 - The M2 test set (180 messages) was written by a separate agent, not by the team; its labels still need a human review.
+- The planted evaluation holds largely by construction (section 6): the expected lane is the rule file applied to
+  the planted facts and the simulated customer knows the planted charge. v2 and B1 differ in two scenarios.
+- The investigator numbers are those of the deterministic policy; its citation check verifies ids, not claims.
+- The security probes run in process, not over HTTP; "session expired 0 of 3" is three attempts.
+- The replica deviates from the real data in volumes and defects (section 7); its B0 matches the real one by
+  construction. The real-data path (`make data` with the key) has not been run at scale by the v2 pipeline.
+- The lane rules consume M2's class (above its accept threshold) and G1's flags as data: three lane C rules can
+  fire on a model output alone (section 2).
 
 ## 12. Pre-existing components and licences
 
@@ -322,7 +364,15 @@ no shared history). The silver SQL and the data contracts come from Arturo's v1.
 ([Arturo-GA/Hackathon-Factored](https://github.com/Arturo-GA/Hackathon-Factored)). Third-party packages and their
 licences: [`LICENCES.md`](LICENCES.md) (regenerate with `python scripts/licences.py`).
 
-## 13. Team
+## 13. Review
+
+An independent review of this build on 1 Nov 2026 (tests run, demo driven in a browser, code read area by area)
+is summarised in [`docs/revision_v2.md`](docs/revision_v2.md): what held, what held only by construction, and
+what was changed afterwards (investigator fallback and lifecycle containment, G1 prompt roles, M2 as the default
+classifier with its class gated by confidence, Wilson intervals, Lambda packaging, CloudFront and Cognito for the
+console, and the wording of sections 1, 2, 4, 6, 7 and 8 above).
+
+## 14. Team
 
 Plan v2 split the work between Andrés (AWS platform, gateway, LLM client, investigator), Diego (data engineering),
 Cristhian (ML and evaluation) and Arturo (conversation, rules, front end, coordination). Arturo built the chat

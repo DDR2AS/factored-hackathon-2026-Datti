@@ -314,12 +314,19 @@ class Orchestrator:
                             lambda: self.classifier.classify(clean, st.language),
                             out=lambda r: f"intent:{r['intent_class']}:{r['p']}")
         if intent["intent_class"] == "manipulation":
-            # Template only: nothing merged, no tool, no case, no buttons.
-            self._step(t, "rule", "manipulation_guard", None, lambda: None, error="manipulation")
-            self._guard(t, "guard.manipulation")
-            t.parts.append(render("manipulation", st.language, st.country))
-            self._count_progress(st, before)
-            return
+            sure = intent.get("gate_action") == "accept" or str(intent.get("model_version") or "").endswith("+guard")
+            if sure:
+                # Template only: nothing merged, no tool, no case, no buttons. "Sure" is the pattern
+                # guard (a rule) or the model above its accept threshold.
+                self._step(t, "rule", "manipulation_guard", None, lambda: None, error="manipulation")
+                self._guard(t, "guard.manipulation")
+                t.parts.append(render("manipulation", st.language, st.country))
+                self._count_progress(st, before)
+                return
+            # The model suspects manipulation but is not sure (gate "ask"): the customer is not
+            # blocked on a doubt; the doubt stays in the trace and the message follows the normal
+            # path (a regulator threat, for instance, still reaches the regulator rule).
+            self._step(t, "rule", "manipulation_guard", None, lambda: None, out=lambda r: "uncertain:not_blocked")
         if st.phase == "block" and (st.block or {}).get("status") == "offered":
             # A card is blocked only with the server-issued button: free text (API, WhatsApp)
             # never counts as "yes", and the offer stays open instead of disappearing.
@@ -351,10 +358,11 @@ class Orchestrator:
             self._on_message_with_case(st, t, text, clean, intent, ext, no_keywords)
             return
         new_flags = self._merge(st, ext, intent)
-        if intent["intent_class"] == "human_request" and not st.flags["asks_for_human"]:
+        sure_class = self._sure_class(intent)
+        if sure_class == "human_request" and not st.flags["asks_for_human"]:
             new_flags.add("asks_for_human")
             st.flags["asks_for_human"] = True
-        if intent["intent_class"] == "lost_card" or ext.flags.lost_card:
+        if sure_class == "lost_card" or ext.flags.lost_card:
             st.lost_card = True
 
         # A message with no keyword at all ("hola", "gracias", an emoji) is not a statement.
@@ -406,7 +414,7 @@ class Orchestrator:
             return
         case = stored.case
         new_flags = self._merge_flags(st, ext, intent)
-        lost_now = intent["intent_class"] == "lost_card" or ext.flags.lost_card
+        lost_now = self._sure_class(intent) == "lost_card" or ext.flags.lost_card
         if lost_now and (st.block or {}).get("status") != "blocked":
             st.lost_card = True
             if case.lane != Lane.C:
@@ -491,7 +499,7 @@ class Orchestrator:
             if getattr(ext.flags, k) and not st.flags[k]:
                 st.flags[k] = True
                 new_flags.add(k)
-        if intent["intent_class"] == "human_request" and not st.flags["asks_for_human"]:
+        if self._sure_class(intent) == "human_request" and not st.flags["asks_for_human"]:
             st.flags["asks_for_human"] = True
             new_flags.add("asks_for_human")
         return new_flags
@@ -694,7 +702,7 @@ class Orchestrator:
 
     def _evidence(self, st: ConversationState) -> lane_rules.Evidence:
         v = st.verification if st.charge_confirmed else {}
-        intent_class = "lost_card" if st.lost_card else (st.intent or {}).get("intent_class")
+        intent_class = "lost_card" if st.lost_card else self._sure_class(st.intent)
         return lane_rules.Evidence(
             intent_class=intent_class,
             complaint_type=st.complaint_type,
@@ -1393,6 +1401,15 @@ class Orchestrator:
             if o.tokens_out is not None:
                 t.tokens_out = (t.tokens_out or 0) + int(o.tokens_out)
         return o.extraction
+
+    @staticmethod
+    def _sure_class(intent: dict | None) -> str | None:
+        """M2's class when the classifier is confident (gate ``accept``), else None. Below the
+        accept threshold the class is a hint (``ask`` clarifies, ``human`` offers a person) and
+        never fires a lane rule by itself: a customer is not sent away on a doubt (D2)."""
+        if not intent or intent.get("gate_action") != "accept":
+            return None
+        return intent.get("intent_class")
 
     def _merge(self, st: ConversationState, ext: extract_mod.Extraction, intent: dict) -> set[str]:
         """Fold one message into the state. Returns the C flags that turned on now."""

@@ -47,6 +47,16 @@ _TRUNCATED = ("max_tokens", "model_context_window_exceeded")
 # JSON output modes, in order: structured outputs; a strict tool; a plain tool (when the schema
 # is too complex for the strict grammar). The next one is tried only after an HTTP 400.
 _NEXT_JSON_MODE = {"format": "tool", "tool": "tool_plain"}
+_JSON_MODE_WORDS = ("output_config", "output_format", "format", "json_schema", "schema", "grammar", "tool", "strict")
+
+
+def _rejects_json_mode(e: "ModelError") -> bool:
+    """A 400 about the JSON output mode (``output_config`` not supported by the platform or the
+    model, a schema the strict grammar can't compile, tools not accepted): worth retrying with the
+    next mode. Any other 400 (bad model ID, request too long, malformed request) is raised as it
+    is; retrying it would bill up to three requests for the same error and hide the real cause."""
+    text = str(e).lower()
+    return any(w in text for w in _JSON_MODE_WORDS)
 
 _LOCK = threading.RLock()
 _CLIENTS: dict[tuple, Any] = {}
@@ -198,7 +208,8 @@ def _call(client: Any, request: dict[str, Any], provider: str) -> Any:
         if status == 429 or status >= 500 or status in (402, 408, 409):
             raise ProviderUnavailable(f"{provider}: no disponible (HTTP {status}) después de los reintentos") from e
         kind = getattr(e, "type", None) or "error"
-        raise ModelError(f"{provider}: solicitud rechazada (HTTP {status}, {kind})", status=status) from e
+        detail = str(getattr(e, "message", "") or "")[:300]  # the API's own text, so callers can tell why
+        raise ModelError(f"{provider}: solicitud rechazada (HTTP {status}, {kind}): {detail}", status=status) from e
     except sdk.APIResponseValidationError as e:
         raise ModelError(f"{provider}: respuesta con forma inesperada") from e
     except sdk.AnthropicError as e:  # CredentialsError, WorkloadIdentityError, ...
@@ -512,7 +523,7 @@ def _complete_real(name: str, model_role: str, prompt_version: str, system: str 
         except ModelError as e:
             # A 400 to a JSON mode (the model, the platform or the schema's complexity): try
             # the next mode, and remember the one that is accepted for this model.
-            following = _NEXT_JSON_MODE.get(mode) if e.status == 400 else None
+            following = _NEXT_JSON_MODE.get(mode) if e.status == 400 and _rejects_json_mode(e) else None
             if following is None:
                 raise
             log.warning("llm: %s rejected JSON mode %s (HTTP 400); retrying with %s", model_id, mode, following)

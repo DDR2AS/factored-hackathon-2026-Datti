@@ -1,6 +1,6 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
-import { clearAnalystSession } from '../src/console/auth'
+import { clearAnalystSession, cognitoPasswordProvider } from '../src/console/auth'
 import { clearDrafts } from '../src/console/drafts'
 import { clearAll } from '../src/session'
 import { registerStrings } from '../src/i18n'
@@ -12,10 +12,15 @@ import { pt } from '../src/i18n/pt'
 registerStrings('es', es)
 registerStrings('pt', pt)
 
+// No /config.json here: the default Cognito provider is "not configured" (no fetch). A test that
+// wants the cloud sign-in builds its own provider with a fake fetch (test/cognito_auth.test.ts).
+cognitoPasswordProvider.primeConfig(null)
+
 afterEach(() => {
   cleanup()
   clearAll()
   clearAnalystSession()
+  cognitoPasswordProvider.primeConfig(null)
   clearDrafts()
   window.sessionStorage.clear()
   window.location.hash = ''

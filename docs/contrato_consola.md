@@ -8,7 +8,7 @@ Todo dato de la demo es sintético. Nada mueve dinero. La ruta la deciden las re
 
 Hecho y probado en local (29 sep, sin commit): todo lo de este documento. Las tres rutas `/analyst/*` (`src/conversation/analyst.py`, enrutadas en `src/handlers/api.py`), el ciclo de vida local (`src/conversation/lifecycle.py`), el stub del investigador (`src/conversation/investigator_stub.py`), el lado servidor de los interruptores (`src/conversation/app.py`) y la exigencia de token en `scripts/local_api.py`. Pruebas en `tests/test_console_backend.py`; escenarios nuevos en `scripts/smoke_api.py` (`--analyst-token`, `--only console|switches`).
 
-Lo que sigue siendo de otros: G2 real (Andrés; el stub es provisional), Step Functions (Andrés; `LIFECYCLE_BACKEND=stepfunctions` falla a propósito), Cognito para la consola en la nube (Andrés). La consola del front (`frontend/src/console`, `#/consola`) está hecha e integrada con estas rutas en local.
+Lo que sigue siendo de otros: G2 real (Andrés; el stub es provisional), Step Functions (Andrés; `LIFECYCLE_BACKEND=stepfunctions` falla a propósito), Cognito para la consola en la nube (aplicado el 1 nov: `USER_PASSWORD_AUTH` en el CDK, proveedor en `auth.ts` y `/config.json` del Web stack; queda crear el usuario demo al desplegar, `docs/despliegue_aws.md` §3). La consola del front (`frontend/src/console`, `#/consola`) está hecha e integrada con estas rutas en local.
 
 ## Rutas del analista
 
@@ -66,7 +66,7 @@ Nube: API Gateway valida el JWT de Cognito (pool `analysts`, sin auto-registro, 
 
 Local: `scripts/local_api.py` exige `Authorization: Bearer <LOCAL_ANALYST_TOKEN>` en `/analyst/*` (comparación en tiempo constante). Si falta o no coincide, responde 401 `{"message":"Unauthorized"}` como API Gateway. Si coincide, inyecta `requestContext.authorizer.jwt.claims = {sub: "analista-local", email: "analista@demo.local"}` en el evento. `LOCAL_ANALYST_TOKEN` se lee de `.env`; si no está, se genera uno al arrancar (`secrets.token_urlsafe`) y se imprime en la consola. Solo `scripts/` conoce ese nombre; un test comprueba que `src/` no lo menciona.
 
-Riesgo conocido (sección 8 de `interfaz_chat_requerimientos.md`): en GET, CloudFront solo reenvía `Authorization` si la cache policy lo incluye. Para `/analyst/*` no hay plan B de header: el autorizador JWT lee `Authorization`. Hace falta una cache policy propia (Andrés).
+Riesgo conocido (sección 8 de `interfaz_chat_requerimientos.md`): en GET, CloudFront solo reenvía `Authorization` si la cache policy lo incluye. Para `/analyst/*` no hay plan B de header: el autorizador JWT lee `Authorization`. Hace falta una cache policy propia (Andrés). **Aplicado el 1 nov:** `web_stack.py` da a `/api/*` la cache policy `api-forward-auth` con `Authorization` (y `x-ev-session`, `Content-Type`) en la clave; `infra/tests` lo comprueba.
 
 ## Ciclo de vida local (ruta B)
 
@@ -179,7 +179,7 @@ Mapeo a EventBridge Scheduler (para Andrés):
 2. `STORE_BACKEND=memory|dynamodb` en #9, que falle fuera de `STAGE=local` si no está definido (ya implementado así en `src/conversation/store.py` del lado memoria). Los stores ganan el ciclo de vida: `CaseStore.put` con verificación de `version` (escritura condicional en DynamoDB) para el 409.
 3. Ciclo de vida: protocolo `CaseLifecycle` de arriba, con `LIFECYCLE_BACKEND=local|stepfunctions` en #9 (mismo criterio de fallar fuera de local). En la nube, `start` arranca la ejecución y `on_decision` hace `SendTaskSuccess` con el task token guardado en el caso; `advance` solo lee.
 4. `GatewayContext.for_analyst(case_id, analyst_sub)` en #2: toma el `customer_id` del caso guardado, nunca del request, y deja `analyst_sub` en la traza.
-5. Cache policy de CloudFront que reenvíe `Authorization` en `/api/analyst/*`.
+5. Cache policy de CloudFront que reenvíe `Authorization` en `/api/analyst/*`. Aplicada el 1 nov (`ApiCachePolicy` en `web_stack.py`, para todo `/api/*`).
 6. Interruptores en la nube: guardarlos en el registro de sesión (no en memoria del proceso) y pasar `tools_down` al gateway por el contexto de la llamada.
 7. `ReviewStore.append_conversation(case_id, turns)` / `get_conversation(case_id)` (30 sep): la conversación redactada de cada caso, un ítem por caso con tope de turnos, fuera del registro del caso (no toca `version`).
 8. Prompts dentro de `src/` (30 sep): #8 dice `prompts/` en la raíz, pero el asset de la Lambda es solo `src/`. Propuesta: `src/conversation/prompts/<prompt_id>/<version>.md`; el cargador de este repo busca ahí primero y después en `prompts/`.

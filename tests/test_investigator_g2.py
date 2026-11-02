@@ -74,7 +74,7 @@ class _FakeLLM:
 
         return llm.render_parts(prompt_id, variables)
 
-    def converse(self, system, messages, tools, model_role="investigator", provider=None):
+    def converse(self, system, messages, tools, model_role="investigator", provider=None, timeout=None):
         self.turn += 1
         if self.turn == 1:
             return {"content": [{"type": "tool_use", "id": "t1", "name": "get_transaction",

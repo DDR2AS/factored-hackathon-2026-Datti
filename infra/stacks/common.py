@@ -24,24 +24,39 @@ LAMBDA_EXCLUDES = ["**/__pycache__", "**/*.pyc", "**/*.ipynb", "etl"]
 # (DuckDB + pandas, which would make every package bigger for nothing).
 API_REQUIREMENTS = "requirements-lambda.txt"
 PIPELINE_REQUIREMENTS = "cloud/requirements-pipeline.txt"
+# Wheel platforms of the local bundler. The python3.12 runtime (``python_function`` below) runs on
+# Amazon Linux 2023 (glibc 2.34): it loads manylinux_2_28 wheels (the only ones duckdb and pandas
+# publish; asking pip for manylinux2014 alone failed and CDK fell back to Docker, review of 1 nov)
+# and the older manylinux_2_17 / manylinux2014 ones (pydantic-core, for example). pip takes the
+# ``--platform`` tags literally (it only expands manylinux2014 to 2010 and 1, never a PEP 600 tag
+# to the older ones it implies), so every tag the runtime loads is listed, newest first.
+LAMBDA_WHEEL_PLATFORMS = ("manylinux_2_28_x86_64", "manylinux_2_17_x86_64", "manylinux2014_x86_64")
+LAMBDA_PYTHON_VERSION = "3.12"
+
+
+def pip_install_command(requirements: str, output_dir: str) -> list[str]:
+    """The pip command of the local bundler: binary wheels only (nothing is compiled here) for
+    Linux x86_64 / CPython 3.12, installed into ``output_dir`` from ``src/<requirements>``."""
+    platforms = [arg for platform in LAMBDA_WHEEL_PLATFORMS for arg in ("--platform", platform)]
+    return [
+        sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir",
+        *platforms, "--implementation", "cp",
+        "--python-version", LAMBDA_PYTHON_VERSION, "--only-binary=:all:",
+        "--target", output_dir, "-r", str(SRC_DIR / requirements),
+    ]
 
 
 @jsii.implements(cdk.ILocalBundling)
 class _PipLocalBundling:
-    """Bundle without Docker (docs/propuesta_infra.patch, verified 29 sep): pip downloads the Linux
-    x86_64 / CPython 3.12 wheels of the requirements file (binary wheels only, nothing is compiled
-    here) and src/ is copied next to them. If pip fails, CDK falls back to the Docker image."""
+    """Bundle without Docker (docs/propuesta_infra.patch, verified 29 sep and 1 nov): pip downloads
+    the Linux x86_64 / CPython 3.12 wheels of the requirements file (``pip_install_command``) and
+    src/ is copied next to them. If pip fails, CDK falls back to the Docker image."""
 
     def __init__(self, requirements: str) -> None:
         self.requirements = requirements
 
     def try_bundle(self, output_dir: str, options=None) -> bool:  # jsii passes both positionally
-        command = [
-            sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir",
-            "--platform", "manylinux2014_x86_64", "--implementation", "cp",
-            "--python-version", "3.12", "--only-binary=:all:",
-            "--target", output_dir, "-r", str(SRC_DIR / self.requirements),
-        ]
+        command = pip_install_command(self.requirements, output_dir)
         result = subprocess.run(command, check=False, capture_output=True, text=True)
         if result.returncode != 0:
             print(result.stdout + result.stderr, file=sys.stderr)
@@ -116,6 +131,20 @@ def python_function(
         tracing=_lambda.Tracing.ACTIVE,
         log_group=log_group,
         environment={"STAGE": cfg.stage, "POWERTOOLS_SERVICE_NAME": slug, **(environment or {})},
+    )
+
+
+def allow_task_responses(function: _lambda.IFunction) -> None:
+    """Let a function answer Step Functions task tokens (``SendTaskSuccess``/``Failure``/
+    ``Heartbeat``). These three actions take no resource-level permission (Service Authorization
+    Reference for Step Functions: no resource type), so the statement must say ``"*"``: with a
+    state machine ARN as Resource (what ``StateMachine.grant_task_response`` writes) the call is
+    denied. The token itself scopes the call to one execution."""
+    function.add_to_role_policy(
+        iam.PolicyStatement(
+            actions=["states:SendTaskSuccess", "states:SendTaskFailure", "states:SendTaskHeartbeat"],
+            resources=["*"],
+        )
     )
 
 

@@ -32,7 +32,9 @@ I18N = SRC / "i18n"
 SOURCE_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".css", ".html"}
 
 # Allowed external URLs (exact prefixes). Empty on purpose until the console needs Cognito.
-ALLOWED_URLS: tuple[str, ...] = ()
+# The only external host the front may talk to: the Cognito sign-in endpoint of the analyst console
+# (frontend/src/console/auth.ts); it is also the only extra origin in the CSP below.
+ALLOWED_URLS: tuple[str, ...] = ("https://cognito-idp.",)
 
 FORBIDDEN_PATTERNS = {
     "dangerouslySetInnerHTML": re.compile(r"dangerouslySetInnerHTML"),
@@ -67,7 +69,7 @@ REFUND_RES = [re.compile(p, re.IGNORECASE) for p in REFUND_PROMISES]
 
 EXPECTED_CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-    "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    "connect-src 'self' https://cognito-idp.us-east-2.amazonaws.com; object-src 'none'; base-uri 'none'; form-action 'self'"
 )
 
 

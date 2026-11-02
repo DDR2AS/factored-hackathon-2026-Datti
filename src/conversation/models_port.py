@@ -3,7 +3,10 @@
 - ``M1_BACKEND``: ``rule`` (the v1.4 rule ``m1-rule-0``, default when unset) or ``model``
   (``models.m1``: LightGBM LambdaRank, calibrated; it still answers with the rule when training
   decided the rule is better or the artifact is missing, and says so in ``model_version``).
-- ``M2_BACKEND``: ``keywords`` (``m2-keywords-0``, default when unset) or ``model`` (``models.m2``).
+- ``M2_BACKEND``: ``model`` (``models.m2``, default when unset; falls back to the keywords when the
+  artifact is missing) or ``keywords`` (``m2-keywords-0``, the M1-build stand-in). The manipulation
+  patterns run in both cases, but alone they catch only a minority of new manipulation attempts,
+  so the model is the default everywhere, not only in ``local_api.py``, the evaluation and the CDK.
 
 Two things stay rule-based whatever M2 says (docs/propuestas_interfaces.md, "Propuesta a
 Cristhian"): the manipulation patterns are a guard OR-ed with the model, so a false negative of the
@@ -110,7 +113,7 @@ def make_ranker(env: Mapping[str, str]) -> Any:
 
 
 def make_classifier(env: Mapping[str, str]) -> Any:
-    name = (env.get("M2_BACKEND") or "keywords").strip().lower()
+    name = (env.get("M2_BACKEND") or "model").strip().lower()
     if name not in M2_BACKENDS:
         raise ValueError(f"M2_BACKEND={name!r} is not valid; use {', '.join(M2_BACKENDS)}")
     if name == "keywords":
